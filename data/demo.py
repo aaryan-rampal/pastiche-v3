@@ -1,17 +1,14 @@
 # %%
 import os
+import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image
 import torch
 import clip
-from PIL import Image
 import faiss
 from tqdm import tqdm
-import os
-import numpy as np
 
 # %%
-import os
-
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -37,10 +34,10 @@ Image.open(images[100])
 # device = "cuda" if torch.cuda.is_available() else "cpu"
 # device is mac's metal
 device = "mps"
-model, preprocess = clip.load("ViT-B/32", device=device)
+model, preprocess = clip.load("ViT-L/14", device=device)
 
 # Example: list of image file paths
-image_paths = images
+image_paths = images[:100]
 
 # Encode all images into embeddings
 embeddings = []
@@ -55,7 +52,6 @@ embeddings = np.vstack(embeddings).astype("float32")
 
 
 # %%
-import numpy as np
 
 d = embeddings.shape[1]  # dimension
 index = faiss.IndexFlatL2(d)  # simple L2 index
@@ -64,35 +60,8 @@ print("Stored", index.ntotal, "embeddings in vector store")
 
 
 # %%
-import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image
-
-
-def make_random_contour(size=256, n_points=10):
-    # Generate random points and smooth them
-    xs = np.linspace(0, size, n_points)
-    ys = np.random.randint(20, size - 20, n_points)
-
-    # Create a figure and axis
-    fig, ax = plt.subplots(figsize=(size / 64, size / 64), dpi=64)
-    ax.plot(xs, ys, color="black", linewidth=3)
-    ax.axis("off")
-    ax.set_xlim(0, size)
-    ax.set_ylim(0, size)
-    fig.canvas.draw()
-
-    # Convert figure to PIL image
-    data = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (4,))
-
-    plt.close(fig)
-    img = Image.fromarray(data)
-    return img.convert("RGB")
-
-
-# Make a random contour
-sketch_img = make_random_contour()
+# %%
+sketch_img = Image.open("../drawing_20250825_013130.png")
 sketch_img
 
 
@@ -132,8 +101,6 @@ except Exception as e:
 
 # %%
 # %%
-import os
-
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["OMP_NUM_THREADS"] = "1"
 
