@@ -74,7 +74,7 @@ print("Stored", index.ntotal, "embeddings in vector store")
 
 # %%
 # %%
-sketch_img = Image.open("../drawing_20250825_013130.png")
+sketch_img = Image.open("edge.png")
 sketch_img
 
 
@@ -94,14 +94,14 @@ try:
     print(f"Sketch embedding numpy shape: {sketch_emb_np.shape}")
 
     # Search FAISS
-    D, I = index.search(sketch_emb_np, k=5)
+    D, I = index.search(sketch_emb_np, k=15)
     print(f"Search results - Distances: {D}")
     print(f"Search results - Indices: {I}")
 
     # Get matching image paths (only valid indices)
     valid_indices = I[0][I[0] < len(image_paths)]
-    matches = [Image.open(image_paths[i]) for i in valid_indices[:5]]
-    match_paths = [image_paths[i] for i in valid_indices[:5]]
+    matches = [Image.open(image_paths[i]) for i in valid_indices[:15]]
+    match_paths = [image_paths[i] for i in valid_indices[:15]]
 
     print("Match paths:")
     for path in match_paths:
@@ -517,125 +517,87 @@ from scipy import ndimage
 
 # # %%
 # --- Two-Stage Patch Search: Fast CLIP then Fine Chamfer ---
-
-# Parameters
-patch_size = 64
-stride = 32
-fine_top_k = 50  # Number of top patches to re-rank with Chamfer
-
-# 1. Fast Patch Search with CLIP Embeddings
+import cv2
+import numpy as np
+from scipy.spatial import procrustes
+from PIL import ImageDraw
 
 
-def get_patch_embeddings(
-    model, preprocess, sketch_img, target_img, patch_size=64, stride=32, batch_size=64
-):
-    device = next(model.parameters()).device
-    # Precompute sketch embedding
-    sketch_input = preprocess(sketch_img).unsqueeze(0).to(device)
-    with torch.no_grad():
-        sketch_emb = model.encode_image(sketch_input)
-        sketch_emb = sketch_emb / sketch_emb.norm(dim=-1, keepdim=True)
-    # Extract patches
-    target_np = np.array(target_img)
-    h, w = target_np.shape[:2]
-    positions = []
-    patch_tensors = []
-    patches = []
-    for y in range(0, h - patch_size + 1, stride):
-        for x in range(0, w - patch_size + 1, stride):
-            patch = target_np[y : y + patch_size, x : x + patch_size]
-            patch_pil = Image.fromarray(patch)
-            patch_resized = patch_pil.resize((224, 224))
-            patch_tensor = preprocess(patch_resized).unsqueeze(0)
-            patch_tensors.append(patch_tensor)
-            positions.append((x, y))
-            patches.append(patch_pil)
-    patch_tensors = torch.cat(patch_tensors, dim=0).to(device)
-    similarities = []
-    with torch.no_grad():
-        for i in range(0, len(patch_tensors), batch_size):
-            batch = patch_tensors[i : i + batch_size]
-            patch_embs = model.encode_image(batch)
-            patch_embs = patch_embs / patch_embs.norm(dim=-1, keepdim=True)
-            sim = torch.matmul(patch_embs, sketch_emb.T).squeeze(1).cpu().numpy()
-            similarities.extend(sim.tolist())
-    return np.array(similarities), positions, patches
+def extract_contours(edge_map):
+    # OpenCV returns a list of numpy arrays, each contour = Nx2 points
+    contours, _ = cv2.findContours(edge_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    # minimum length threshold to filter noise
+    return [c.squeeze() for c in contours if len(c) > 50]
 
 
-# 2. Fine Matching with Chamfer Distance
+def align_contours(sketch_pts, target_pts):
+    """
+    Align sketch_pts to target_pts using Procrustes.
+    Returns aligned sketch, scale factor, rotation matrix, translation, and disparity.
+    """
+    # Procrustes requires same number of points → resample
+    N = min(len(sketch_pts), len(target_pts))
+    sketch_resampled = sketch_pts[np.linspace(0, len(sketch_pts) - 1, N, dtype=int)]
+    target_resampled = target_pts[np.linspace(0, len(target_pts) - 1, N, dtype=int)]
+
+    # scipy's procrustes returns standardized (rotated+scaled+translated) points
+    mtx1, mtx2, disparity = procrustes(target_resampled, sketch_resampled)
+    return mtx1, mtx2, disparity
 
 
-def to_edge_map(img, low_threshold=50, high_threshold=150):
-    img_gray = np.array(img.convert("L"))
-    edges = cv2.Canny(img_gray, low_threshold, high_threshold)
-    return edges
+# Get contours from sketch and target image
+sketch_edges = cv2.Canny(np.array(sketch_img.convert("L")), 50, 150)
+sketch_contours = extract_contours(sketch_edges)
 
+best_score = float("inf")
+best_pair = (None, None)
+best_mat = (None, None)
+best_img = None
+for target_img in matches:
+    target_edges = cv2.Canny(np.array(target_img.convert("L")), 50, 150)
+    target_contours = extract_contours(target_edges)
 
-def edge_to_points(edge_map):
-    ys, xs = np.where(edge_map > 0)
-    points = np.stack([xs, ys], axis=1)
-    return points
+    for s in sketch_contours:
+        for t in target_contours:
+            try:
+                mtx1, mtx2, score = align_contours(s, t)
+                if score < best_score:
+                    print("New best score:", score)
+                    best_score = score
+                    best_pair = (s, t)
+                    best_img = target_img
+                    best_mat = (mtx1, mtx2)
+            except Exception:
+                continue
 
+print("Best matching contour found with score:", best_score)
 
-from chamferdist import ChamferDistance
+# Visualization: draw best matching target contour
+img_vis = best_img.convert("RGB").copy()
+draw = ImageDraw.Draw(img_vis)
+if best_pair[1] is not None:
+    # Draw as a polygon
+    pts = best_pair[1]
+    pts = [tuple(map(int, pt)) for pt in pts]
+    draw.line(pts + [pts[0]], fill="red", width=2)
+plt.figure(figsize=(8, 8))
+plt.imshow(img_vis)
+plt.title("Best Matching Contour (red)")
+plt.axis("off")
+plt.show()
 
-cd = ChamferDistance()
+# %%
+import matplotlib.pyplot as plt
 
+mtx1, mtx2 = best_mat
+plt.figure(figsize=(6, 6))
+plt.plot(mtx1[:, 0], mtx1[:, 1], label="Target (aligned)", color="red")
+plt.plot(mtx2[:, 0], mtx2[:, 1], label="Sketch (aligned)", color="blue")
+plt.legend()
+plt.title("Procrustes Alignment")
+plt.axis("equal")
+plt.show()
 
-def chamfer_distance(points1, points2):
-    # points: [N, 2] arrays
-    if len(points1) == 0 or len(points2) == 0:
-        return float("inf")
-    t1 = torch.tensor(points1[None], dtype=torch.float32)
-    t2 = torch.tensor(points2[None], dtype=torch.float32)
-    return cd(t1, t2).item()
-
-
-# --- Run Two-Stage Search on matches[0] ---
-if "matches" in locals() and matches:
-    target_img = matches[0]
-    etarget_img = to_edge_rgb(target_img)
-    eimg = to_edge_rgb(sketch_img)
-    # Stage 1: Fast CLIP patch search
-    similarities, positions, patches = get_patch_embeddings(
-        model, preprocess, eimg, etarget_img, patch_size, stride
-    )
-    # Get top K patches
-    topk_idx = np.argsort(similarities)[-fine_top_k:][::-1]
-    top_patches = [(patches[i], positions[i]) for i in topk_idx]
-    # Stage 2: Fine Chamfer re-ranking
-    sketch_edges = to_edge_map(sketch_img)
-    sketch_points = edge_to_points(sketch_edges)
-    best_score = float("inf")
-    best_patch = None
-    best_patch_location = None
-    for patch_img, patch_coords in top_patches:
-        patch_edges = to_edge_map(patch_img)
-        patch_points = edge_to_points(patch_edges)
-        score = chamfer_distance(sketch_points, patch_points)
-        if score < best_score:
-            best_score = score
-            best_patch = patch_img
-            best_patch_location = patch_coords
-    print("Best patch score:", best_score)
-    print("Best patch location:", best_patch_location)
-    # Visualization: overlay sketch on best patch location in target image
-    overlay_img = target_img.copy().convert("RGBA")
-    # Resize sketch to patch size
-    sketch_resized = sketch_img.resize((patch_size, patch_size))
-    # Paste with transparency
-    overlay = sketch_resized.convert("RGBA")
-    overlay_img.paste(overlay, best_patch_location, overlay)
-    plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
-    plt.imshow(target_img)
-    plt.title("Target Image")
-    plt.axis("off")
-    plt.subplot(1, 2, 2)
-    plt.imshow(overlay_img)
-    plt.title("Sketch Overlay at Best Patch")
-    plt.axis("off")
-    plt.tight_layout()
-    plt.show()
+# %%
 
 # %%
