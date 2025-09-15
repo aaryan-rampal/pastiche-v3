@@ -1,19 +1,21 @@
 # %%
 import os
+from models import ImageModel, Contour
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
 from tqdm import tqdm
 
 # %%
-dir = "/Volumes/Extreme SSD/wikiart/wikiart_5pct"
-lo, hi = 150, 200
+dir: str = "/Volumes/Extreme SSD/wikiart/wikiart_5pct"
+lo: int = 150
+hi: int = 250
 
 # %%
-images = []
-metadata = []
+images: list[str] = []
+metadata: list[str] = []
 for root, dirs, files in os.walk(dir):
     for file in files:
         if file.endswith(".jpg") and file.startswith("image"):
@@ -23,69 +25,116 @@ for root, dirs, files in os.walk(dir):
 
 
 # %%
-# Encode all images into embeddings
-def to_edge_rgb(pil_img, low=lo, high=hi):
-    gray = np.array(pil_img.convert("L"))
-    edges = cv2.Canny(gray, low, high)
-    edges_3ch = np.stack([edges] * 3, axis=-1)
-    return Image.fromarray(edges_3ch)
+# image is grayscale in shape (h, w)
+# returns np.ndarray of shape (N, 2) for each contour
+def extract_contours(image: np.ndarray) -> list[np.ndarray]:
+    canny_img = cv2.Canny(image, lo, hi)
 
+    contours: list[np.ndarray] = []
+    contours, _ = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-def extract_contours(edge_map):
-    # OpenCV returns a list of numpy arrays, each contour = Nx2 points
-    contours, _ = cv2.findContours(edge_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    # this will be a list of arrays of shape (N, 2)
     # minimum length threshold to filter noise
-    return [c.squeeze() for c in contours if len(c) > 50]
+    contours_squeezed = [c.squeeze() for c in contours if len(c) > 50]
+
+    return contours_squeezed
 
 
 # %%
-image_contours = {}
-random_images = np.random.choice(images, size=500, replace=False)
-for idx, target_img in tqdm(enumerate(random_images), total=len(random_images)):
-    target_img = Image.open(target_img)
-    target_edges = cv2.Canny(np.array(target_img.convert("L")), lo, hi)
-    target_contours = extract_contours(target_edges)
-    image_shape = np.array(target_img).shape
+image_ids: dict[str, ImageModel] = {}
+random_images = np.random.choice(images, size=5, replace=False)
 
-    image_contours[idx] = (target_contours, image_shape)
+for idx, img_path in tqdm(enumerate(random_images), total=len(random_images)):
+    target_img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    if target_img is None:
+        raise ValueError(f"Failed to load image: {img_path}")
+
+    target_shape: tuple[int, int] = (target_img.shape[0], target_img.shape[1])  # (h, w)
+    assert len(target_shape) == 2, f"Image shape is not 2D: {target_shape}"
+
+    target_contours: list[np.ndarray] = extract_contours(target_img)
+
+    image_ids[img_path] = ImageModel(image_id=img_path, image_shape=target_shape)
+    image_ids[img_path].add_contours(target_contours)
 # %%
 # length of contours
-# lengths = [len(c) for cs in image_contours.values() for c in cs]
-relative_areas = [
-    cv2.contourArea(c) / (shape[0] * shape[1])
-    for cs, shape in image_contours.values()
-    for c in cs
-]
-plt.hist(relative_areas, bins=50)
-plt.yscale("log")
+relative_areas = []
+relative_lengths = []
+for idx, img_model in image_ids.items():
+    for contour in img_model.contours:
+        if contour.area is not None:
+            relative_areas.append(contour.area)
+        if contour.length is not None:
+            relative_lengths.append(contour.length)
+
+plt.scatter(relative_areas, relative_lengths, alpha=0.5)
 plt.xlabel("Relative Contour Area")
-plt.ylabel("Count")
-plt.title("Distribution of Contour Areas")
+plt.yscale("log")
+plt.ylabel("Relative Contour Length")
+plt.title("Distribution of Contour Areas and Lengths")
 plt.show()
 
+# %%
+# calculate IQR and outliers
+q1_area, q3_area = np.percentile(relative_areas, [25, 75])
+iqr_area = q3_area - q1_area
+lower_bound_area = max(0, q1_area - 1.5 * iqr_area)
+upper_bound_area = min(1, q3_area + 1.5 * iqr_area)
+print(
+    "Area - IQR:",
+    iqr_area,
+    "Lower bound:",
+    lower_bound_area,
+    "Upper bound:",
+    upper_bound_area,
+)
+q1_length, q3_length = np.percentile(relative_lengths, [25, 75])
+iqr_length = q3_length - q1_length
+lower_bound_length = max(0, q1_length - 1.5 * iqr_length)
+upper_bound_length = min(1, q3_length + 1.5 * iqr_length)
+print(
+    "Length - IQR:",
+    iqr_length,
+    "Lower bound:",
+    lower_bound_length,
+    "Upper bound:",
+    upper_bound_length,
+)
+# %%
+# two histograms of contour lengths and areas
+fig, ax = plt.subplots(2, 1, figsize=(12, 12))
+ax[0].hist(relative_areas, bins=50)
+ax[0].set_xlabel("Relative Contour Area")
+ax[0].set_ylabel("Count")
+ax[0].set_yscale("log")
+ax[0].axvline(lower_bound_area, color="r", linestyle="dashed", linewidth=1)
+ax[0].axvline(upper_bound_area, color="g", linestyle="dashed", linewidth=1)
+
+ax[1].hist(relative_lengths, bins=50)
+ax[1].set_xlabel("Relative Contour Length")
+ax[1].set_ylabel("Count")
+ax[1].set_yscale("log")
+ax[1].axvline(lower_bound_length, color="r", linestyle="dashed", linewidth=1)
+ax[1].axvline(upper_bound_length, color="g", linestyle="dashed", linewidth=1)
+plt.show()
 
 # %%
-# find argmax contour
-max_contour = None
-max_length = 0
-max_image = None
-for img, cs in image_contours.items():
-    for c in cs:
-        c = c[0]
-        if len(c) > max_length:
-            max_length = len(c)
-            max_contour = c
-            max_image = img
+n = 0
+for _, img_model in image_ids.items():
+    n += len(img_model.contours)
+print(n, "contours in total")
 
-assert max_contour is not None
-assert max_image is not None
-print(f"Max contour length: {max_length} from image {max_image}")
 # %%
-# Visualize the longest contour
-target_img = Image.open(random_images[max_image])
-target_edges = cv2.Canny(np.array(target_img.convert("L")), lo, hi)
-plt.imshow(target_img, cmap="gray")
-plt.plot(max_contour[:, 0], max_contour[:, 1], "r-", linewidth=0.5)
-plt.title("Longest Contour Overlay")
+# visualize some contours
+random_image: ImageModel = np.random.choice(list(image_ids.values()))
+print(random_image.image_id)
+img = Image.open(random_image.image_id)
+
+plt.figure(figsize=(8, 8))
+plt.imshow(img)
+for contour in random_image.contours:
+    pts = np.array(contour.points, dtype=np.int32)
+    plt.plot(pts[:, 0], pts[:, 1], linewidth=1)
+plt.title("All Contours")
 
 # %%
