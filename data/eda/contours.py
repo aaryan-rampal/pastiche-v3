@@ -11,7 +11,7 @@ from tqdm import tqdm
 # %%
 dir: str = "/Volumes/Extreme SSD/wikiart/wikiart_5pct"
 lo: int = 150
-hi: int = 250
+hi: int = 200
 
 # %%
 images: list[str] = []
@@ -42,7 +42,7 @@ def extract_contours(image: np.ndarray) -> list[np.ndarray]:
 
 # %%
 image_ids: dict[str, ImageModel] = {}
-random_images = np.random.choice(images, size=5, replace=False)
+random_images = np.random.choice(images, size=50, replace=False)
 
 for idx, img_path in tqdm(enumerate(random_images), total=len(random_images)):
     target_img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
@@ -128,10 +128,10 @@ print(n, "contours in total")
 # visualize some contours
 random_image: ImageModel = np.random.choice(list(image_ids.values()))
 print(random_image.image_id)
-img = Image.open(random_image.image_id)
+img = cv2.imread(random_image.image_id, cv2.IMREAD_GRAYSCALE)
 
 plt.figure(figsize=(8, 8))
-plt.imshow(img)
+plt.imshow(img, cmap="gray")
 for contour in random_image.contours:
     pts = np.array(contour.points, dtype=np.int32)
     plt.plot(pts[:, 0], pts[:, 1], linewidth=1)

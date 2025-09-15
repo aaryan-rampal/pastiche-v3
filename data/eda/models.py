@@ -63,5 +63,4 @@ class ImageModel(BaseModel):
                 )
                 self.contours.append(contour)
             except ValueError as e:
-                # Skip invalid contours
-                print(f"Skipping contour: {e}")
+                pass
