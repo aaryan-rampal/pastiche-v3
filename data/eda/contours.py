@@ -150,3 +150,65 @@ plt.title("Distribution of Contours per Image")
 
 
 # %%
+sketch_img = cv2.imread("../edge.png", cv2.IMREAD_GRAYSCALE)
+if sketch_img is None:
+    raise ValueError("Failed to load edge image")
+plt.figure(figsize=(8, 8))
+plt.imshow(sketch_img, cmap="gray")
+plt.title("Sketch Image")
+
+# %%
+sketch_model: ImageModel = ImageModel(
+    image_id="../edge.png", image_shape=sketch_img.shape
+)
+sketch_contours = extract_contours(sketch_img)
+sketch_model.add_contours(sketch_contours)
+print(f"Extracted {len(sketch_model.contours)} contours from sketch")
+
+# %%
+# run procrustes analysis on contours
+from scipy.spatial import procrustes
+import heapq
+
+def align_contours(sketch_pts, target_pts):
+    """
+    Align sketch_pts to target_pts using Procrustes.
+    Returns aligned sketch, scale factor, rotation matrix, translation, and disparity.
+    """
+    # Procrustes requires same number of points → resample
+    N = min(len(sketch_pts), len(target_pts))
+    sketch_resampled = sketch_pts[np.linspace(0, len(sketch_pts) - 1, N, dtype=int)]
+    target_resampled = target_pts[np.linspace(0, len(target_pts) - 1, N, dtype=int)]
+
+    # scipy's procrustes returns standardized (rotated+scaled+translated) points
+    mtx1, mtx2, disparity = procrustes(target_resampled, sketch_resampled)
+    return mtx1, mtx2, disparity
+
+
+# %%
+n_minimum = 5
+best_scores: list[tuple[float, str, Contour]] = []  # (score, img_path, contour)
+for img_path, img_model in tqdm(image_ids.items()):
+    for contour in img_model.contours:
+        mtx1, mtx2, score = align_contours(sketch_pts=sketch_model.contours[0].points, target_pts=contour.points)
+        heapq.heappush(best_scores, (score, img_path, contour))
+# %%
+best_scores = heapq.nsmallest(n_minimum, best_scores)
+fig, ax = plt.subplots(n_minimum + 1, 1, figsize=(5, 5 * (n_minimum + 1)))
+# show sketch in first subplot
+ax[0].imshow(sketch_img, cmap="gray")
+ax[0].set_title("Sketch")
+ax[0].axis("off")
+for i, (score, img_path, contour) in enumerate(best_scores):
+    target_img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+    if target_img is None:
+        raise ValueError(f"Failed to load image: {img_path}")
+
+    ax[i + 1].imshow(target_img)
+    pts = np.array(contour.points, dtype=np.int32)
+    ax[i + 1].plot(pts[:, 0], pts[:, 1], color="red", linewidth=2)
+    ax[i + 1].set_title(f"Score: {score:.6f}")
+    ax[i + 1].axis("off")
+
+
+# %%
