@@ -36,10 +36,16 @@ class Contour(BaseModel):
     def compute_derived_fields(self):
         self.length = self.points.shape[0] / (self.image_shape[0] * self.image_shape[1])
         self.area = cv2.contourArea(self.points) / (self.image_shape[0] * self.image_shape[1])
-        if self.length > self.max_length or self.length < self.min_length:
-            raise ValueError(f"Contour too long: {self.length}")
-        if self.area > self.max_area or self.area < self.min_area:
-            raise ValueError(f"Contour area too large: {self.area}")
+
+        if self.length < self.min_length:
+            raise ValueError(f"Contour too short: {self.length}")
+        # if self.length > self.max_length:
+        #     raise ValueError(f"Contour too long: {self.length}")
+
+        if self.area < self.min_area:
+            raise ValueError(f"Contour area too small: {self.area}")
+        # if self.area > self.max_area:
+        #     raise ValueError(f"Contour area too large: {self.area}")
         return self
 
 
