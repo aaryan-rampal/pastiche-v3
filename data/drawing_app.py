@@ -5,8 +5,9 @@ from datetime import datetime
 
 
 class DrawingApp:
-    def __init__(self, canvas_size=(512, 512)):
+    def __init__(self, canvas_size=(512, 512), max_points=25):
         self.canvas_size = canvas_size
+        self.max_points = max_points  # Maximum number of points to keep per line
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
         self.ax.set_xlim(0, canvas_size[0])
         self.ax.set_ylim(0, canvas_size[1])
@@ -36,10 +37,29 @@ class DrawingApp:
 
         self.current_line.append((event.xdata, event.ydata))
 
-        # Draw the current line segment
+        # Limit to max_points if needed
+        if len(self.current_line) > self.max_points:
+            self.current_line = self.current_line[-self.max_points :]
+
+            # Clear and redraw the axis with only the visible points
+            self.ax.clear()
+            self.ax.set_xlim(0, self.canvas_size[0])
+            self.ax.set_ylim(0, self.canvas_size[1])
+            self.ax.set_aspect("equal")
+            self.ax.invert_yaxis()
+            self.ax.set_title("Draw on the canvas - Close window when done")
+
+            # Draw all completed lines
+            for line in self.lines:
+                if len(line) >= 2:
+                    x_coords = [p[0] for p in line]
+                    y_coords = [p[1] for p in line]
+                    self.ax.plot(x_coords, y_coords, "k-", linewidth=2)
+
+        # Draw the current line
         if len(self.current_line) >= 2:
-            x_coords = [p[0] for p in self.current_line[-2:]]
-            y_coords = [p[1] for p in self.current_line[-2:]]
+            x_coords = [p[0] for p in self.current_line]
+            y_coords = [p[1] for p in self.current_line]
             self.ax.plot(x_coords, y_coords, "k-", linewidth=2)
             self.fig.canvas.draw_idle()
 
@@ -48,6 +68,9 @@ class DrawingApp:
             return
         self.is_drawing = False
         if self.current_line:
+            # Ensure we don't exceed max_points before saving the line
+            if len(self.current_line) > self.max_points:
+                self.current_line = self.current_line[-self.max_points :]
             self.lines.append(self.current_line.copy())
         self.current_line = []
 
