@@ -42,7 +42,7 @@ def extract_contours(image: np.ndarray) -> list[np.ndarray]:
 
 # %%
 image_ids: dict[str, ImageModel] = {}
-random_images = np.random.choice(images, size=50, replace=False)
+random_images = np.random.choice(images, size=500, replace=False)
 
 for idx, img_path in tqdm(enumerate(random_images), total=len(random_images)):
     target_img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
@@ -136,5 +136,17 @@ for contour in random_image.contours:
     pts = np.array(contour.points, dtype=np.int32)
     plt.plot(pts[:, 0], pts[:, 1], linewidth=1)
 plt.title("All Contours")
+
+# %%
+# visualize histogram of contours per image
+contour_counts = np.array([len(img_model.contours) for img_model in image_ids.values()])
+lo, hi = np.percentile(contour_counts, [5, 95])
+filtered_ends = contour_counts[(contour_counts > lo) & (contour_counts < hi)]
+plt.figure(figsize=(10, 6))
+plt.hist(filtered_ends, bins=30, color="skyblue", edgecolor="black")
+plt.xlabel("Number of Contours per Image")
+plt.ylabel("Number of Images")
+plt.title("Distribution of Contours per Image")
+
 
 # %%
