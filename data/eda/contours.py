@@ -150,7 +150,8 @@ plt.title("Distribution of Contours per Image")
 
 
 # %%
-sketch_img = cv2.imread("../edge.png", cv2.IMREAD_GRAYSCALE)
+sketch_path = "../../drawing_20250825_013130.png"
+sketch_img = cv2.imread(sketch_path, cv2.IMREAD_GRAYSCALE)
 if sketch_img is None:
     raise ValueError("Failed to load edge image")
 plt.figure(figsize=(8, 8))
@@ -159,7 +160,7 @@ plt.title("Sketch Image")
 
 # %%
 sketch_model: ImageModel = ImageModel(
-    image_id="../edge.png", image_shape=sketch_img.shape
+    image_id=sketch_path, image_shape=sketch_img.shape
 )
 sketch_contours = extract_contours(sketch_img)
 sketch_model.add_contours(sketch_contours)
