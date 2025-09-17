@@ -11,7 +11,6 @@ import faiss
 from scipy.spatial import procrustes
 import pickle
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from functools import partial
 import multiprocessing as mp
 
 # %%
@@ -128,27 +127,40 @@ def compute_procrustes_parallel(sketch_contour, faiss_results, n_workers=None):
     # Prepare arguments for parallel processing
     args_list = []
     for hu_distance, img_path, contour_idx, contour in faiss_results:
-        args_list.append((sketch_contour, hu_distance, img_path, contour_idx, contour.points))
+        args_list.append(
+            (sketch_contour, hu_distance, img_path, contour_idx, contour.points)
+        )
 
     # Process in parallel
     procrustes_results = []
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         # Submit all tasks
-        future_to_args = {executor.submit(compute_procrustes_single, args): args for args in args_list}
+        future_to_args = {
+            executor.submit(compute_procrustes_single, args): args for args in args_list
+        }
 
         # Collect results with progress bar
-        for future in tqdm(as_completed(future_to_args), total=len(args_list), desc="Computing Procrustes"):
+        for future in tqdm(
+            as_completed(future_to_args),
+            total=len(args_list),
+            desc="Computing Procrustes",
+        ):
             result = future.result()
             if result is not None:
-                procrustes_score, img_path, contour_idx, contour_points, hu_distance = result
+                procrustes_score, img_path, contour_idx, contour_points, hu_distance = (
+                    result
+                )
                 # Reconstruct contour object for compatibility
                 from models import Contour
+
                 contour = Contour(
                     points=contour_points,
                     image_id=img_path,
-                    image_shape=(100, 100)  # Dummy shape, won't be used
+                    image_shape=(100, 100),  # Dummy shape, won't be used
                 )
-                procrustes_results.append((procrustes_score, img_path, contour, hu_distance))
+                procrustes_results.append(
+                    (procrustes_score, img_path, contour, hu_distance)
+                )
 
     return procrustes_results
 
@@ -258,7 +270,8 @@ class ContourFAISSIndex:
 print("Loading and processing images...")
 image_ids: dict[str, ImageModel] = {}
 random.seed(42)
-random_images = random.sample(images, k=min(500, len(images)))
+# random_images = random.sample(images, k=min(500, len(images)))
+random_images = images
 print(random_images[-1])
 
 for idx, img_path in tqdm(enumerate(random_images), total=len(random_images)):
@@ -268,10 +281,10 @@ for idx, img_path in tqdm(enumerate(random_images), total=len(random_images)):
 
     target_shape: tuple[int, int] = (target_img.shape[0], target_img.shape[1])
     target_contours: list[np.ndarray] = extract_contours(target_img)
-
-    if target_contours:  # Only add if we found contours
-        image_ids[img_path] = ImageModel(image_id=img_path, image_shape=target_shape)
-        image_ids[img_path].add_contours(target_contours)
+    img_model: ImageModel = ImageModel(image_id=img_path, image_shape=target_shape)
+    img_model.add_contours(target_contours)
+    if img_model.contours:  # Only add if we found contours
+        image_ids[img_path] = img_model
 
 print(f"Processed {len(image_ids)} images")
 
@@ -282,7 +295,7 @@ faiss_index = ContourFAISSIndex()
 faiss_index.build_index(image_ids)
 
 # Optionally save the index
-# faiss_index.save_index("contour_hu_index")
+faiss_index.save_index("contour_hu_index")
 
 # %%
 # Load sketch and extract contours
@@ -351,7 +364,7 @@ if sketch_model.contours:
 
     print("Running two-stage matching...")
     best_matches = find_best_matches(
-        sketch_contour, faiss_index, top_k_faiss=40_000, top_k_final=5
+        sketch_contour, faiss_index, top_k_faiss=40_000, top_k_final=10
     )
 
     # Visualize results
