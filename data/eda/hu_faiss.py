@@ -189,7 +189,7 @@ class ContourFAISSIndex:
                     np.isinf(enhanced_features)
                 ):
                     feature_vectors.append(enhanced_features)
-                    metadata.append((img_path, contour_idx, contour))
+                    metadata.append((img_path, contour_idx))
 
         if not feature_vectors:
             raise ValueError("No valid features computed")
@@ -237,8 +237,8 @@ class ContourFAISSIndex:
         results = []
         for i, idx in enumerate(indices[0]):
             if idx < len(self.contour_metadata):
-                img_path, contour_idx, contour = self.contour_metadata[idx]
-                results.append((distances[0][i], img_path, contour_idx, contour))
+                img_path, contour_idx = self.contour_metadata[idx]
+                results.append((distances[0][i], img_path, contour_idx))
 
         return results
 
@@ -343,7 +343,8 @@ def find_best_matches(
     print(f"Stage 2: Procrustes refinement on {len(faiss_results)} candidates...")
     procrustes_results = []
 
-    for hu_distance, img_path, contour_idx, contour in tqdm(faiss_results):
+    for hu_distance, img_path, contour_idx in tqdm(faiss_results):
+        contour = image_ids[img_path].contours[contour_idx]
         try:
             _, _, procrustes_score = align_contours(sketch_contour, contour.points)
             procrustes_results.append(
