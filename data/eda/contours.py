@@ -1,4 +1,5 @@
 # %%
+import random
 import os
 from models import ImageModel, Contour
 
@@ -42,7 +43,9 @@ def extract_contours(image: np.ndarray) -> list[np.ndarray]:
 
 # %%
 image_ids: dict[str, ImageModel] = {}
-random_images = np.random.choice(images, size=500, replace=False)
+random.seed(42)
+random_images = random.sample(images, k=min(500, len(images)))
+print(random_images[-1])
 
 for idx, img_path in tqdm(enumerate(random_images), total=len(random_images)):
     target_img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
@@ -150,7 +153,7 @@ plt.title("Distribution of Contours per Image")
 
 
 # %%
-sketch_path = "../sketches/weird_2.png"
+sketch_path = "../sketches/edge.png"
 sketch_img = cv2.imread(sketch_path, cv2.IMREAD_GRAYSCALE)
 if sketch_img is None:
     raise ValueError("Failed to load edge image")
