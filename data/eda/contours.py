@@ -150,7 +150,7 @@ plt.title("Distribution of Contours per Image")
 
 
 # %%
-sketch_path = "../../drawing_20250825_013130.png"
+sketch_path = "../sketches/weird_2.png"
 sketch_img = cv2.imread(sketch_path, cv2.IMREAD_GRAYSCALE)
 if sketch_img is None:
     raise ValueError("Failed to load edge image")
