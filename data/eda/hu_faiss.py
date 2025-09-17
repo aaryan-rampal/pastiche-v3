@@ -10,6 +10,9 @@ from tqdm import tqdm
 import faiss
 from scipy.spatial import procrustes
 import pickle
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
+import multiprocessing as mp
 
 # %%
 dir: str = "/Volumes/Extreme SSD/wikiart/wikiart_5pct"
@@ -104,6 +107,49 @@ def align_contours(sketch_pts, target_pts):
     target_resampled = target_pts[np.linspace(0, len(target_pts) - 1, N, dtype=int)]
     mtx1, mtx2, disparity = procrustes(target_resampled, sketch_resampled)
     return mtx1, mtx2, disparity
+
+
+def compute_procrustes_single(args):
+    """Helper function for parallel Procrustes computation"""
+    sketch_contour, hu_distance, img_path, contour_idx, contour_points = args
+    try:
+        _, _, procrustes_score = align_contours(sketch_contour, contour_points)
+        return (procrustes_score, img_path, contour_idx, contour_points, hu_distance)
+    except Exception:
+        return None
+
+
+def compute_procrustes_parallel(sketch_contour, faiss_results, n_workers=None):
+    """Compute Procrustes scores in parallel"""
+    if n_workers is None:
+        n_workers = min(mp.cpu_count(), len(faiss_results))
+
+    # Prepare arguments for parallel processing
+    args_list = []
+    for hu_distance, img_path, contour_idx, contour in faiss_results:
+        args_list.append((sketch_contour, hu_distance, img_path, contour_idx, contour.points))
+
+    # Process in parallel
+    procrustes_results = []
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        # Submit all tasks
+        future_to_args = {executor.submit(compute_procrustes_single, args): args for args in args_list}
+
+        # Collect results with progress bar
+        for future in tqdm(as_completed(future_to_args), total=len(args_list), desc="Computing Procrustes"):
+            result = future.result()
+            if result is not None:
+                procrustes_score, img_path, contour_idx, contour_points, hu_distance = result
+                # Reconstruct contour object for compatibility
+                from models import Contour
+                contour = Contour(
+                    points=contour_points,
+                    image_id=img_path,
+                    image_shape=(100, 100)  # Dummy shape, won't be used
+                )
+                procrustes_results.append((procrustes_score, img_path, contour, hu_distance))
+
+    return procrustes_results
 
 
 # %%
