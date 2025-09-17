@@ -33,7 +33,8 @@ for root, dirs, files in os.walk(dir):
 # %%
 def extract_contours(image: np.ndarray) -> list[np.ndarray]:
     """Extract contours from grayscale image"""
-    canny_img = cv2.Canny(image, lo, hi)
+    blurred = cv2.GaussianBlur(image, (5, 5), 0)
+    canny_img = cv2.Canny(blurred, lo, hi)
     contours, _ = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     contours_squeezed = [c.squeeze() for c in contours if len(c) > 50]
     return contours_squeezed
