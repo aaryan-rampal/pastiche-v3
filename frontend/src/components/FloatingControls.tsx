@@ -12,10 +12,6 @@ interface FloatingControlsProps {
 const FloatingControls: React.FC<FloatingControlsProps> = ({
   isDarkMode,
   onToggleDarkMode,
-  onClear,
-  onUpload,
-  strokeCount,
-  maxStrokes
 }) => {
   return (
     <>
@@ -39,26 +35,13 @@ const FloatingControls: React.FC<FloatingControlsProps> = ({
         </button>
       </div>
 
-      {/* Bottom Upload Button */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
-        <button
-          onClick={onUpload}
-          className="glass-control bg-amber-500/20 hover:bg-amber-500/30 transition-all duration-300 rounded-full px-8 py-4 flex items-center gap-3"
-          disabled={strokeCount === 0}
-          aria-label="Find matching artwork"
-        >
-          <svg
-            className={`w-6 h-6 ${strokeCount === 0 ? 'text-gray-400' : 'text-amber-400'}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <span className={`font-medium ${strokeCount === 0 ? 'text-gray-400' : (isDarkMode ? 'text-white' : 'text-gray-800')}`}>
-            {strokeCount === 0 ? 'Draw to search' : 'Find Art Match'}
-          </span>
-        </button>
+      {/* Pastiche info section */}
+      {/* Make it smaller */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+        <span className={`font-medium text-gray-400`}>
+        <center><p><strong>Pastiche</strong></p></center>
+        <p><small><em>"An artistic work in a style that imitates that of another work, artist, or period."</em></small></p>
+        </span>
       </div>
 
       {/* Help Text */}

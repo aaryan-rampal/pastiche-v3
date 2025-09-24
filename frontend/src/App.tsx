@@ -58,10 +58,6 @@ function App() {
       <FloatingControls
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
-        onClear={handleClear}
-        strokeCount={strokeCount}
-        maxStrokes={maxStrokes}
-        isSearching={isSearching}
       />
     </div>
   )
