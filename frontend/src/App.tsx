@@ -1,34 +1,69 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import React, { useState, useCallback } from 'react'
+import ImmersiveCanvas from './components/ImmersiveCanvas'
+import FloatingControls from './components/FloatingControls'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('pastiche-dark-mode')
+    return saved ? JSON.parse(saved) : false // Default to light mode
+  })
+
+  const [strokeCount, setStrokeCount] = useState(0)
+  const [isSearching, setIsSearching] = useState(false)
+  const maxStrokes = 25
+
+  // Toggle dark mode
+  const toggleDarkMode = useCallback(() => {
+    setIsDarkMode((prev: boolean) => {
+      const newValue = !prev
+      localStorage.setItem('pastiche-dark-mode', JSON.stringify(newValue))
+      return newValue
+    })
+  }, [])
+
+  // Clear canvas
+  const handleClear = useCallback(() => {
+    setStrokeCount(0)
+    setIsSearching(false)
+  }, [])
+
+  // Handle stroke count changes from canvas
+  const handleStrokeCountChange = useCallback((count: number) => {
+    setStrokeCount(count)
+  }, [])
+
+  // Handle search trigger
+  const handleSearchTrigger = useCallback(() => {
+    if (strokeCount > 0) {
+      setIsSearching(true)
+      // Auto-hide search after animation completes
+      setTimeout(() => setIsSearching(false), 4000)
+    }
+  }, [strokeCount])
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div className={`app ${isDarkMode ? 'dark' : 'light'}`}>
+      {/* Immersive Canvas */}
+      <ImmersiveCanvas
+        isDarkMode={isDarkMode}
+        onStrokeCountChange={handleStrokeCountChange}
+        onSearchTrigger={handleSearchTrigger}
+        onClear={handleClear}
+        maxStrokes={maxStrokes}
+        isSearching={isSearching}
+      />
+
+      {/* Floating Controls */}
+      <FloatingControls
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={toggleDarkMode}
+        onClear={handleClear}
+        strokeCount={strokeCount}
+        maxStrokes={maxStrokes}
+        isSearching={isSearching}
+      />
+    </div>
   )
 }
 
