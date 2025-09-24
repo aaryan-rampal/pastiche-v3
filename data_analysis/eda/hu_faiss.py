@@ -1,4 +1,5 @@
 # %%
+import pandas as pd
 import random
 import os
 from models import ImageModel
@@ -14,19 +15,12 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
 
 # %%
-dir: str = "/Volumes/Extreme SSD/wikiart/wikiart_5pct"
+DATA_DIR: str = "/Volumes/Extreme SSD/wikiart/"
 lo: int = 150
 hi: int = 200
 
 # %%
-images: list[str] = []
-metadata: list[str] = []
-for root, dirs, files in os.walk(dir):
-    for file in files:
-        if file.endswith(".jpg") and file.startswith("image"):
-            images.append(os.path.join(root, file))
-        elif file.endswith(".json"):
-            metadata.append(os.path.join(root, file))
+df = pd.read_csv("../../data/classes_truncated.csv")
 
 
 # %%
@@ -269,12 +263,9 @@ class ContourFAISSIndex:
 # Load and process images
 print("Loading and processing images...")
 image_ids: dict[str, ImageModel] = {}
-random.seed(42)
-# random_images = random.sample(images, k=min(500, len(images)))
-random_images = images
-print(random_images[-1])
 
-for idx, img_path in tqdm(enumerate(random_images), total=len(random_images)):
+for row in tqdm(df.itertuples(), total=len(df)):
+    img_path = os.path.join(DATA_DIR, row.filename)
     target_img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     if target_img is None:
         continue
