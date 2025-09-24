@@ -170,13 +170,17 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
       "Unveiling hidden similarities..."
     ]
 
-    // Start animation after 2 seconds of inactivity
-    animationTimeoutRef.current = setTimeout(() => {
-      if (strokes.length > 0) {
-        setIsAnimating(true)
-        setCurrentMessage(messages[Math.floor(Math.random() * messages.length)])
-      }
-    }, 2000)
+    // Trigger animation immediately when user stops drawing
+    if (strokes.length > 0) {
+      setIsAnimating(true)
+      setCurrentMessage(messages[Math.floor(Math.random() * messages.length)])
+
+      // Stop animation after 4 seconds
+      setTimeout(() => {
+        setIsAnimating(false)
+        setCurrentMessage('')
+      }, 4000)
+    }
   }, [isDrawing, strokes.length])
 
   // Render glow effects during animation
@@ -185,20 +189,66 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
 
     return (
       <div className="absolute inset-0 pointer-events-none">
+        {/* Primary glow effects for each stroke */}
         {strokes.map((stroke, index) => (
+          <React.Fragment key={`glow-effects-${stroke.id}`}>
+            {/* Main stroke glow */}
+            <div
+              className="stroke-glow"
+              style={{
+                left: stroke.x - 40,
+                top: stroke.y - 40,
+                width: 80,
+                height: 80,
+                animationDelay: `${index * 0.05}s`
+              }}
+            />
+
+            {/* Secondary pulse */}
+            <div
+              className="stroke-pulse"
+              style={{
+                left: stroke.x - 30,
+                top: stroke.y - 30,
+                width: 60,
+                height: 60,
+                animationDelay: `${index * 0.05 + 0.3}s`
+              }}
+            />
+
+            {/* Ripple wave */}
+            <div
+              className="ripple-wave"
+              style={{
+                left: stroke.x - 20,
+                top: stroke.y - 20,
+                width: 40,
+                height: 40,
+                animationDelay: `${index * 0.05 + 0.6}s`
+              }}
+            />
+          </React.Fragment>
+        ))}
+
+        {/* Central connecting waves */}
+        <div className="absolute inset-0 flex items-center justify-center">
           <div
-            key={`glow-${stroke.id}`}
-            className="absolute amber-glow rounded-full"
+            className="stroke-glow"
             style={{
-              left: stroke.x - 30,
-              top: stroke.y - 30,
-              width: 60,
-              height: 60,
-              background: `radial-gradient(circle, rgba(245, 158, 11, 0.3) 0%, rgba(245, 158, 11, 0.1) 50%, transparent 100%)`,
-              animationDelay: `${index * 0.1}s`
+              width: 200,
+              height: 200,
+              animationDelay: '0.5s'
             }}
           />
-        ))}
+          <div
+            className="stroke-pulse"
+            style={{
+              width: 150,
+              height: 150,
+              animationDelay: '1s'
+            }}
+          />
+        </div>
       </div>
     )
   }
@@ -219,11 +269,17 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
 
       {/* Animation message */}
       {isAnimating && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-black/20 backdrop-blur-md rounded-full px-8 py-4">
-            <p className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+          <div className="search-overlay">
+            {/* Pulsing rings */}
+            <div className="search-pulse"></div>
+            <div className="search-pulse"></div>
+            <div className="search-pulse"></div>
+
+            {/* Message */}
+            <div className="search-message">
               {currentMessage}
-            </p>
+            </div>
           </div>
         </div>
       )}
