@@ -238,9 +238,14 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
       "Finding the perfect artwork...",
       "Discovering masterpiece matches...",
       "Connecting with art history...",
-      "Searching the masters...",
       "Exploring artistic connections...",
-      "Unveiling hidden similarities..."
+      "Unveiling hidden similarities...",
+      "Interlacing creative visions...",
+      "Bridging modern expression...",
+      "Harmonizing strokes and souls...",
+      "Crafting your art journey...",
+      "Woah, this one's special...",
+      "Perfection takes time, that's why this is fast..."
     ]
 
     // Trigger animation immediately when user stops drawing
