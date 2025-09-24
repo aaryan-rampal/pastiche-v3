@@ -254,15 +254,34 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
         setCurrentMessage('')
       }, 4000)
     }
-  }, [isDrawing, currentPath, completeCurrentStroke])  // Render glow effects during animation
+  }, [isDrawing, currentPath, completeCurrentStroke])  // Generate random ripple points
+  const generateRandomRipplePoints = (count: number = 15) => {
+    const canvas = canvasRef.current
+    if (!canvas) return []
+
+    const points = []
+    for (let i = 0; i < count; i++) {
+      points.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        delay: Math.random() * 1, // Random delay between 0-1 seconds
+        size: 30 + Math.random() * 40 // Random size between 30-70px
+      })
+    }
+    return points
+  }
+
+  // Render glow effects during animation
   const renderGlowEffects = () => {
     if (!isAnimating || strokePaths.length === 0) return null
 
+    const randomRipplePoints = generateRandomRipplePoints(15)
+
     return (
       <div className="absolute inset-0 pointer-events-none">
-        {/* Primary glow effects for each stroke path */}
+        {/* Primary glow effects for stroke paths */}
         {strokePaths.map((strokePath, pathIndex) =>
-          strokePath.points.slice(0, Math.min(strokePath.points.length, 10)).map((point, pointIndex) => (
+          strokePath.points.slice(0, Math.min(strokePath.points.length, 5)).map((point, pointIndex) => (
             <React.Fragment key={`glow-effects-${strokePath.id}-${pointIndex}`}>
               {/* Main stroke glow */}
               <div
@@ -272,7 +291,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
                   top: point.y - 40,
                   width: 80,
                   height: 80,
-                  animationDelay: `${(pathIndex * 10 + pointIndex) * 0.05}s`
+                  animationDelay: `${(pathIndex * 5 + pointIndex) * 0.1}s`
                 }}
               />
 
@@ -284,24 +303,32 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
                   top: point.y - 30,
                   width: 60,
                   height: 60,
-                  animationDelay: `${(pathIndex * 10 + pointIndex) * 0.05 + 0.3}s`
-                }}
-              />
-
-              {/* Ripple wave */}
-              <div
-                className="ripple-wave"
-                style={{
-                  left: point.x - 20,
-                  top: point.y - 20,
-                  width: 40,
-                  height: 40,
-                  animationDelay: `${(pathIndex * 10 + pointIndex) * 0.05 + 0.6}s`
+                  animationDelay: `${(pathIndex * 5 + pointIndex) * 0.1 + 0.3}s`
                 }}
               />
             </React.Fragment>
           ))
         )}
+
+        {/* Random ripple waves across the canvas */}
+        {randomRipplePoints.map((point, index) => {
+          const animationDuration = 3.5 + Math.random() * 2 // 3.5-5.5s
+
+          return (
+            <div
+              key={`random-ripple-${index}`}
+              className="ripple-wave-delayed"
+              style={{
+                left: point.x - point.size/2,
+                top: point.y - point.size/2,
+                width: point.size,
+                height: point.size,
+                animationDelay: `${point.delay}s`,
+                animationDuration: `${animationDuration}s`
+              }}
+            />
+          )
+        })}
 
         {/* Central connecting waves */}
         <div className="absolute inset-0 flex items-center justify-center">

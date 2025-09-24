@@ -264,23 +264,81 @@ body {
 @keyframes rippleWave {
   0% {
     opacity: 0;
-    transform: scale(0.3);
+    transform: scale(0.1);
+    filter: blur(0px);
+  }
+  10% {
+    opacity: 0.3;
+    transform: scale(0.2);
+    filter: blur(0px);
+  }
+  25% {
+    opacity: 0.8;
+    transform: scale(0.6);
     filter: blur(1px);
   }
-  30% {
+  50% {
     opacity: 0.6;
-    transform: scale(0.8);
+    transform: scale(1.2);
     filter: blur(2px);
   }
-  60% {
-    opacity: 0.8;
-    transform: scale(1.2);
+  75% {
+    opacity: 0.3;
+    transform: scale(2.0);
     filter: blur(4px);
+  }
+  90% {
+    opacity: 0.1;
+    transform: scale(2.8);
+    filter: blur(6px);
   }
   100% {
     opacity: 0;
-    transform: scale(2.5);
-    filter: blur(10px);
+    transform: scale(3.2);
+    filter: blur(8px);
+  }
+}
+
+@keyframes rippleWaveDelayed {
+  0% {
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.1);
+    filter: blur(0px);
+  }
+  1% {
+    visibility: visible;
+  }
+  10% {
+    opacity: 0.3;
+    transform: scale(0.2);
+    filter: blur(0px);
+  }
+  25% {
+    opacity: 0.8;
+    transform: scale(0.6);
+    filter: blur(1px);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+    filter: blur(2px);
+  }
+  75% {
+    opacity: 0.3;
+    transform: scale(2.0);
+    filter: blur(4px);
+  }
+  90% {
+    opacity: 0.1;
+    transform: scale(2.8);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(3.2);
+    filter: blur(8px);
   }
 }
 
@@ -302,12 +360,29 @@ body {
 }
 
 .ripple-wave {
-  animation: rippleWave 0.2s ease-out;
+  animation: rippleWave 3.5s ease-in-out;
   pointer-events: none;
   position: absolute;
   border-radius: 50%;
   border: 2px solid var(--amber-glow);
-  background: transparent;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 60%);
+  box-shadow:
+    0 0 20px rgba(245, 158, 11, 0.3),
+    inset 0 0 20px rgba(245, 158, 11, 0.1);
+}
+
+.ripple-wave-delayed {
+  animation: rippleWaveDelayed 3.5s ease-in-out;
+  pointer-events: none;
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid var(--amber-glow);
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 60%);
+  box-shadow:
+    0 0 20px rgba(245, 158, 11, 0.3),
+    inset 0 0 20px rgba(245, 158, 11, 0.1);
+  opacity: 0;
+  visibility: hidde1;
 }
 
 /* Custom scrollbar (just in case) */
