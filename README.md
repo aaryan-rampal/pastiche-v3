@@ -54,6 +54,8 @@ Because I can do better. I am better at ML, backend, frontend, and so is the tec
    - Enhanced feature vectors with area/perimeter ratios
    - Normalization for scale independence
 
+[Check out the FAISS implementation notebook for a demo.](./data/eda/hu_faiss.ipynb)
+
 3. **Two-Stage Matching**
    - **Stage 1**: FAISS approximate nearest neighbor search (fast, ~400ms)
    - **Stage 2**: Procrustes analysis on top candidates (precise, shape alignment)
