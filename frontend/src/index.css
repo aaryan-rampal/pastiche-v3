@@ -22,6 +22,10 @@
   --amber-soft: #fbbf24;
   --glass-bg: rgba(255, 255, 255, 0.1);
   --glass-border: rgba(255, 255, 255, 0.2);
+
+  /* Theme-aware text colors */
+  --search-text-light: #2c2826;
+  --search-text-dark: #f5f2ed;
 }
 
 * {
@@ -160,10 +164,21 @@ body {
   font-family: 'Playfair Display', serif;
   font-size: 1.5rem;
   font-weight: 500;
-  color: var(--amber-glow);
   text-align: center;
   opacity: 0;
   animation: fadeInOut 2s ease-in-out infinite;
+}
+
+/* Light mode search text */
+.app.light .search-message {
+  color: var(--search-text-light);
+  text-shadow: 0 2px 8px rgba(250, 248, 243, 0.8);
+}
+
+/* Dark mode search text */
+.app.dark .search-message {
+  color: var(--search-text-dark);
+  text-shadow: 0 2px 8px rgba(45, 42, 38, 0.8);
 }
 
 @keyframes searchPulse {
