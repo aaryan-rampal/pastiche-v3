@@ -302,7 +302,7 @@ body {
 }
 
 .ripple-wave {
-  animation: rippleWave 3s ease-out;
+  animation: rippleWave 0.2s ease-out;
   pointer-events: none;
   position: absolute;
   border-radius: 50%;

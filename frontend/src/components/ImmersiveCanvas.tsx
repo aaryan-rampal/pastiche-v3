@@ -1,11 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 
-interface Stroke {
+interface StrokePoint {
   x: number
   y: number
   pressure: number
-  angle: number
+}
+
+interface StrokePath {
+  points: StrokePoint[]
   id: number
+  isComplete: boolean
 }
 
 interface ImmersiveCanvasProps {
@@ -15,14 +19,15 @@ interface ImmersiveCanvasProps {
 const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const contextRef = useRef<CanvasRenderingContext2D | null>(null)
-  const [strokes, setStrokes] = useState<Stroke[]>([])
+  const [strokePaths, setStrokePaths] = useState<StrokePath[]>([])
+  const [currentPath, setCurrentPath] = useState<StrokePoint[]>([])
   const [isDrawing, setIsDrawing] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
   const [currentMessage, setCurrentMessage] = useState('')
 
   const maxStrokes = 25
+  const maxContourLength = 25 // Maximum pixels for a single contour
   const strokeIdRef = useRef(0)
-  const lastMousePos = useRef({ x: 0, y: 0 })
   const animationTimeoutRef = useRef<number | null>(null)
 
   // Initialize canvas
@@ -47,7 +52,40 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     return () => window.removeEventListener('resize', resizeCanvas)
   }, [])
 
-  // Render strokes with brush-like effect
+  // Helper function to calculate path length
+  const calculatePathLength = (points: StrokePoint[]): number => {
+    if (points.length < 2) return 0
+
+    let totalLength = 0
+    for (let i = 1; i < points.length; i++) {
+      const dx = points[i].x - points[i - 1].x
+      const dy = points[i].y - points[i - 1].y
+      totalLength += Math.sqrt(dx * dx + dy * dy)
+    }
+    return totalLength
+  }
+
+  // Helper function to complete current stroke
+  const completeCurrentStroke = useCallback(() => {
+    if (currentPath.length === 0) return
+
+    const newPath: StrokePath = {
+      points: currentPath,
+      id: strokeIdRef.current++,
+      isComplete: true
+    }
+
+    setStrokePaths(prev => {
+      const updated = [...prev, newPath]
+      // Keep only the latest 25 stroke paths (instant removal)
+      return updated.slice(-maxStrokes)
+    })
+
+    // Clear current path to start a new one
+    setCurrentPath([])
+  }, [currentPath])
+
+  // Render smooth stroke paths
   useEffect(() => {
     const canvas = canvasRef.current
     const context = contextRef.current
@@ -56,49 +94,82 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     // Clear canvas
     context.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Draw each stroke with brush effect
-    strokes.forEach((stroke) => {
+    // Set stroke color based on theme
+    const strokeColor = isDarkMode ? '#f5f2ed' : '#1a1614'
+
+    // Draw completed stroke paths
+    strokePaths.forEach((strokePath) => {
+      if (strokePath.points.length < 2) return
+
       context.save()
+      context.strokeStyle = strokeColor
+      context.lineCap = 'round'
+      context.lineJoin = 'round'
+      context.shadowColor = strokeColor
+      context.shadowBlur = 2
 
-      // Set stroke color based on theme
-      const strokeColor = isDarkMode ? '#f5f2ed' : '#1a1614'
-
-      // Create brush-like effect
-      const brushSize = 4 + stroke.pressure * 6
-
-      // Main stroke
-      context.fillStyle = strokeColor
+      // Draw smooth path using quadratic curves
       context.beginPath()
-      context.arc(stroke.x, stroke.y, brushSize, 0, Math.PI * 2)
-      context.fill()
+      context.moveTo(strokePath.points[0].x, strokePath.points[0].y)
 
-      // Add texture with multiple smaller circles
-      for (let i = 0; i < 5; i++) {
-        const offsetX = (Math.random() - 0.5) * brushSize * 1.5
-        const offsetY = (Math.random() - 0.5) * brushSize * 1.5
-        const size = brushSize * (0.3 + Math.random() * 0.4)
+      const start = strokePath.points.length - 25 > 0 ? strokePath.points.length - 25 : 0
+      for (let i = start; i < strokePath.points.length - 1; i++) {
+        const currentPoint = strokePath.points[i]
+        const nextPoint = strokePath.points[i + 1]
 
-        context.globalAlpha = 0.6 + Math.random() * 0.4
-        context.beginPath()
-        context.arc(stroke.x + offsetX, stroke.y + offsetY, size, 0, Math.PI * 2)
-        context.fill()
+        // Variable line width based on pressure
+        const pressure = currentPoint.pressure
+        context.lineWidth = 3 + pressure * 8
+
+        // Use quadratic curve for smoothness
+        const controlX = (currentPoint.x + nextPoint.x) / 2
+        const controlY = (currentPoint.y + nextPoint.y) / 2
+        context.quadraticCurveTo(currentPoint.x, currentPoint.y, controlX, controlY)
       }
 
-      // Add directional streaks
-      context.globalAlpha = 0.4
-      context.fillStyle = strokeColor
-      const streakLength = brushSize * 2
-      const streakWidth = brushSize * 0.3
+      // Handle last point
+      if (strokePath.points.length > 1) {
+        const lastPoint = strokePath.points[strokePath.points.length - 1]
+        context.lineTo(lastPoint.x, lastPoint.y)
+      }
 
-      context.save()
-      context.translate(stroke.x, stroke.y)
-      context.rotate(stroke.angle)
-      context.fillRect(-streakLength/2, -streakWidth/2, streakLength, streakWidth)
-      context.restore()
-
+      context.stroke()
       context.restore()
     })
-  }, [strokes, isDarkMode])
+
+    // Draw current path being drawn
+    if (currentPath.length > 1) {
+      context.save()
+      context.strokeStyle = strokeColor
+      context.lineCap = 'round'
+      context.lineJoin = 'round'
+      context.shadowColor = strokeColor
+      context.shadowBlur = 2
+
+      context.beginPath()
+      context.moveTo(currentPath[0].x, currentPath[0].y)
+
+      for (let i = 1; i < currentPath.length - 1; i++) {
+        const currentPoint = currentPath[i]
+        const nextPoint = currentPath[i + 1]
+
+        const pressure = currentPoint.pressure
+        context.lineWidth = 3 + pressure * 8
+
+        const controlX = (currentPoint.x + nextPoint.x) / 2
+        const controlY = (currentPoint.y + nextPoint.y) / 2
+        context.quadraticCurveTo(currentPoint.x, currentPoint.y, controlX, controlY)
+      }
+
+      if (currentPath.length > 1) {
+        const lastPoint = currentPath[currentPath.length - 1]
+        context.lineTo(lastPoint.x, lastPoint.y)
+      }
+
+      context.stroke()
+      context.restore()
+    }
+  }, [strokePaths, currentPath, isDarkMode])
 
   // Start drawing
   const startDrawing = useCallback((event: React.MouseEvent) => {
@@ -109,7 +180,11 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
 
-    lastMousePos.current = { x, y }
+    // Clear all existing stroke paths when starting new drawing session
+    setStrokePaths([])
+
+    // Start new path
+    setCurrentPath([{ x, y, pressure: 0.8 }])
     setIsDrawing(true)
     setIsAnimating(false)
 
@@ -129,37 +204,35 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
 
-    // Calculate angle from mouse movement
-    const dx = x - lastMousePos.current.x
-    const dy = y - lastMousePos.current.y
-    const angle = Math.atan2(dy, dx)
-
     // Calculate pressure from movement speed (simulated)
-    const distance = Math.sqrt(dx * dx + dy * dy)
-    const pressure = Math.min(1, Math.max(0.3, 1 - distance / 50))
+    const pressure = Math.min(1, Math.max(0.3, Math.random() * 0.4 + 0.6))
 
-    const newStroke: Stroke = {
-      x,
-      y,
-      pressure,
-      angle,
-      id: strokeIdRef.current++
+    // Create new point
+    const newPoint: StrokePoint = { x, y, pressure }
+
+    // Check if adding this point would exceed the maximum contour length
+    const potentialPath = [...currentPath, newPoint]
+    const pathLength = calculatePathLength(potentialPath)
+
+    if (pathLength > maxContourLength && currentPath.length > 1) {
+      // Complete current stroke and start a new one
+      completeCurrentStroke()
+      // Start new path with this point
+      setCurrentPath([newPoint])
+    } else {
+      // Add point to current path
+      setCurrentPath(prev => [...prev, newPoint])
     }
-
-    setStrokes(prev => {
-      const updated = [...prev, newStroke]
-      // Keep only the latest 25 strokes (instant removal)
-      return updated.slice(-maxStrokes)
-    })
-
-    lastMousePos.current = { x, y }
-  }, [isDrawing])
+  }, [isDrawing, currentPath, completeCurrentStroke])
 
   // Stop drawing and trigger animation
   const stopDrawing = useCallback(() => {
     if (!isDrawing) return
 
     setIsDrawing(false)
+
+    // Complete the current path if it has points
+    completeCurrentStroke()
 
     const messages = [
       "Finding the perfect artwork...",
@@ -171,7 +244,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     ]
 
     // Trigger animation immediately when user stops drawing
-    if (strokes.length > 0) {
+    if (currentPath.length > 0) {
       setIsAnimating(true)
       setCurrentMessage(messages[Math.floor(Math.random() * messages.length)])
 
@@ -181,54 +254,54 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
         setCurrentMessage('')
       }, 4000)
     }
-  }, [isDrawing, strokes.length])
-
-  // Render glow effects during animation
+  }, [isDrawing, currentPath, completeCurrentStroke])  // Render glow effects during animation
   const renderGlowEffects = () => {
-    if (!isAnimating || strokes.length === 0) return null
+    if (!isAnimating || strokePaths.length === 0) return null
 
     return (
       <div className="absolute inset-0 pointer-events-none">
-        {/* Primary glow effects for each stroke */}
-        {strokes.map((stroke, index) => (
-          <React.Fragment key={`glow-effects-${stroke.id}`}>
-            {/* Main stroke glow */}
-            <div
-              className="stroke-glow"
-              style={{
-                left: stroke.x - 40,
-                top: stroke.y - 40,
-                width: 80,
-                height: 80,
-                animationDelay: `${index * 0.05}s`
-              }}
-            />
+        {/* Primary glow effects for each stroke path */}
+        {strokePaths.map((strokePath, pathIndex) =>
+          strokePath.points.slice(0, Math.min(strokePath.points.length, 10)).map((point, pointIndex) => (
+            <React.Fragment key={`glow-effects-${strokePath.id}-${pointIndex}`}>
+              {/* Main stroke glow */}
+              <div
+                className="stroke-glow"
+                style={{
+                  left: point.x - 40,
+                  top: point.y - 40,
+                  width: 80,
+                  height: 80,
+                  animationDelay: `${(pathIndex * 10 + pointIndex) * 0.05}s`
+                }}
+              />
 
-            {/* Secondary pulse */}
-            <div
-              className="stroke-pulse"
-              style={{
-                left: stroke.x - 30,
-                top: stroke.y - 30,
-                width: 60,
-                height: 60,
-                animationDelay: `${index * 0.05 + 0.3}s`
-              }}
-            />
+              {/* Secondary pulse */}
+              <div
+                className="stroke-pulse"
+                style={{
+                  left: point.x - 30,
+                  top: point.y - 30,
+                  width: 60,
+                  height: 60,
+                  animationDelay: `${(pathIndex * 10 + pointIndex) * 0.05 + 0.3}s`
+                }}
+              />
 
-            {/* Ripple wave */}
-            <div
-              className="ripple-wave"
-              style={{
-                left: stroke.x - 20,
-                top: stroke.y - 20,
-                width: 40,
-                height: 40,
-                animationDelay: `${index * 0.05 + 0.6}s`
-              }}
-            />
-          </React.Fragment>
-        ))}
+              {/* Ripple wave */}
+              <div
+                className="ripple-wave"
+                style={{
+                  left: point.x - 20,
+                  top: point.y - 20,
+                  width: 40,
+                  height: 40,
+                  animationDelay: `${(pathIndex * 10 + pointIndex) * 0.05 + 0.6}s`
+                }}
+              />
+            </React.Fragment>
+          ))
+        )}
 
         {/* Central connecting waves */}
         <div className="absolute inset-0 flex items-center justify-center">
@@ -284,12 +357,6 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
         </div>
       )}
 
-      {/* Stroke counter */}
-      <div className="absolute top-6 left-6 glass-control bg-white/10 rounded-full px-4 py-2">
-        <span className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-          {strokes.length}/{maxStrokes} strokes
-        </span>
-      </div>
     </div>
   )
 }
