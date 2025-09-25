@@ -25,7 +25,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
   const [isAnimating, setIsAnimating] = useState(false)
   const [currentMessage, setCurrentMessage] = useState('')
 
-  const maxPoints = 150 // Maximum points in a single continuous stroke
+  const maxPoints = 75 // Maximum points in a single continuous stroke
   const strokeIdRef = useRef(0)
   const animationTimeoutRef = useRef<number | null>(null)
 
@@ -260,11 +260,21 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
 
     const randomRipplePoints = generateRandomRipplePoints(15)
 
+    // Sample points evenly distributed across the entire stroke for glow effects
+    const glowPointCount = Math.min(20, strokePath.points.length) // Up to 20 glow points
+    const stepSize = Math.max(1, Math.floor(strokePath.points.length / glowPointCount))
+    const sampledPoints = []
+
+    for (let i = 0; i < strokePath.points.length; i += stepSize) {
+      sampledPoints.push({ point: strokePath.points[i], originalIndex: i })
+      if (sampledPoints.length >= glowPointCount) break
+    }
+
     return (
       <div className="absolute inset-0 pointer-events-none">
-        {/* Primary glow effects for stroke points */}
-        {strokePath.points.slice(0, Math.min(strokePath.points.length, 10)).map((point, pointIndex) => (
-          <React.Fragment key={`glow-effects-${strokePath.id}-${pointIndex}`}>
+        {/* Primary glow effects for stroke points - distributed across entire contour */}
+        {sampledPoints.map(({ point, originalIndex }, pointIndex) => (
+          <React.Fragment key={`glow-effects-${strokePath.id}-${originalIndex}`}>
             {/* Main stroke glow */}
             <div
               className="stroke-glow"
