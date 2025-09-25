@@ -205,6 +205,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
   const stopDrawing = useCallback(() => {
     if (!isDrawing) return
     console.log('Completed stroke with points:', currentPath.length)
+    console.log('Final stroke path:', currentPath)
 
     setIsDrawing(false)
 
