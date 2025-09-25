@@ -19,14 +19,13 @@ interface ImmersiveCanvasProps {
 const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const contextRef = useRef<CanvasRenderingContext2D | null>(null)
-  const [strokePaths, setStrokePaths] = useState<StrokePath[]>([])
+  const [strokePath, setStrokePath] = useState<StrokePath | null>(null)
   const [currentPath, setCurrentPath] = useState<StrokePoint[]>([])
   const [isDrawing, setIsDrawing] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
   const [currentMessage, setCurrentMessage] = useState('')
 
-  const maxStrokes = 25
-  const maxContourLength = 25 // Maximum pixels for a single contour
+  const maxPoints = 150 // Maximum points in a single continuous stroke
   const strokeIdRef = useRef(0)
   const animationTimeoutRef = useRef<number | null>(null)
 
@@ -52,22 +51,11 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     return () => window.removeEventListener('resize', resizeCanvas)
   }, [])
 
-  // Helper function to calculate path length
-  const calculatePathLength = (points: StrokePoint[]): number => {
-    if (points.length < 2) return 0
-
-    let totalLength = 0
-    for (let i = 1; i < points.length; i++) {
-      const dx = points[i].x - points[i - 1].x
-      const dy = points[i].y - points[i - 1].y
-      totalLength += Math.sqrt(dx * dx + dy * dy)
-    }
-    return totalLength
-  }
-
   // Helper function to complete current stroke
   const completeCurrentStroke = useCallback(() => {
     if (currentPath.length === 0) return
+
+    console.log('Completing stroke with', currentPath.length, 'points')
 
     const newPath: StrokePath = {
       points: currentPath,
@@ -75,13 +63,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
       isComplete: true
     }
 
-    setStrokePaths(prev => {
-      const updated = [...prev, newPath]
-      // Keep only the latest 25 stroke paths (instant removal)
-      return updated.slice(-maxStrokes)
-    })
-
-    // Clear current path to start a new one
+    setStrokePath(newPath)
     setCurrentPath([])
   }, [currentPath])
 
@@ -97,10 +79,8 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     // Set stroke color based on theme
     const strokeColor = isDarkMode ? '#f5f2ed' : '#1a1614'
 
-    // Draw completed stroke paths
-    strokePaths.forEach((strokePath) => {
-      if (strokePath.points.length < 2) return
-
+    // Draw completed stroke path
+    if (strokePath && strokePath.points.length > 1) {
       context.save()
       context.strokeStyle = strokeColor
       context.lineCap = 'round'
@@ -112,8 +92,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
       context.beginPath()
       context.moveTo(strokePath.points[0].x, strokePath.points[0].y)
 
-      const start = strokePath.points.length - 25 > 0 ? strokePath.points.length - 25 : 0
-      for (let i = start; i < strokePath.points.length - 1; i++) {
+      for (let i = 1; i < strokePath.points.length - 1; i++) {
         const currentPoint = strokePath.points[i]
         const nextPoint = strokePath.points[i + 1]
 
@@ -128,14 +107,12 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
       }
 
       // Handle last point
-      if (strokePath.points.length > 1) {
-        const lastPoint = strokePath.points[strokePath.points.length - 1]
-        context.lineTo(lastPoint.x, lastPoint.y)
-      }
+      const lastPoint = strokePath.points[strokePath.points.length - 1]
+      context.lineTo(lastPoint.x, lastPoint.y)
 
       context.stroke()
       context.restore()
-    })
+    }
 
     // Draw current path being drawn
     if (currentPath.length > 1) {
@@ -169,7 +146,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
       context.stroke()
       context.restore()
     }
-  }, [strokePaths, currentPath, isDarkMode])
+  }, [strokePath, currentPath, isDarkMode])
 
   // Start drawing
   const startDrawing = useCallback((event: React.MouseEvent) => {
@@ -180,8 +157,8 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
 
-    // Clear all existing stroke paths when starting new drawing session
-    setStrokePaths([])
+    // Clear existing stroke when starting new drawing session
+    setStrokePath(null)
 
     // Start new path
     setCurrentPath([{ x, y, pressure: 0.8 }])
@@ -210,24 +187,24 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
     // Create new point
     const newPoint: StrokePoint = { x, y, pressure }
 
-    // Check if adding this point would exceed the maximum contour length
-    const potentialPath = [...currentPath, newPoint]
-    const pathLength = calculatePathLength(potentialPath)
+    // Add point to current path with FIFO queue behavior
+    setCurrentPath(prev => {
+      const updatedPath = [...prev, newPoint]
 
-    if (pathLength > maxContourLength && currentPath.length > 1) {
-      // Complete current stroke and start a new one
-      completeCurrentStroke()
-      // Start new path with this point
-      setCurrentPath([newPoint])
-    } else {
-      // Add point to current path
-      setCurrentPath(prev => [...prev, newPoint])
-    }
-  }, [isDrawing, currentPath, completeCurrentStroke])
+      // If we exceed maxPoints, remove the oldest point (FIFO)
+      if (updatedPath.length > maxPoints) {
+        console.log('FIFO queue: Removing oldest point, keeping newest', maxPoints, 'points')
+        return updatedPath.slice(-maxPoints) // Keep only the most recent maxPoints
+      }
+
+      return updatedPath
+    })
+  }, [isDrawing])
 
   // Stop drawing and trigger animation
   const stopDrawing = useCallback(() => {
     if (!isDrawing) return
+    console.log('Completed stroke with points:', currentPath.length)
 
     setIsDrawing(false)
 
@@ -259,6 +236,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
         setCurrentMessage('')
       }, 4000)
     }
+
   }, [isDrawing, currentPath, completeCurrentStroke])  // Generate random ripple points
   const generateRandomRipplePoints = (count: number = 15) => {
     const canvas = canvasRef.current
@@ -278,42 +256,40 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
 
   // Render glow effects during animation
   const renderGlowEffects = () => {
-    if (!isAnimating || strokePaths.length === 0) return null
+    if (!isAnimating || !strokePath || strokePath.points.length === 0) return null
 
     const randomRipplePoints = generateRandomRipplePoints(15)
 
     return (
       <div className="absolute inset-0 pointer-events-none">
-        {/* Primary glow effects for stroke paths */}
-        {strokePaths.map((strokePath, pathIndex) =>
-          strokePath.points.slice(0, Math.min(strokePath.points.length, 5)).map((point, pointIndex) => (
-            <React.Fragment key={`glow-effects-${strokePath.id}-${pointIndex}`}>
-              {/* Main stroke glow */}
-              <div
-                className="stroke-glow"
-                style={{
-                  left: point.x - 40,
-                  top: point.y - 40,
-                  width: 80,
-                  height: 80,
-                  animationDelay: `${(pathIndex * 5 + pointIndex) * 0.1}s`
-                }}
-              />
+        {/* Primary glow effects for stroke points */}
+        {strokePath.points.slice(0, Math.min(strokePath.points.length, 10)).map((point, pointIndex) => (
+          <React.Fragment key={`glow-effects-${strokePath.id}-${pointIndex}`}>
+            {/* Main stroke glow */}
+            <div
+              className="stroke-glow"
+              style={{
+                left: point.x - 40,
+                top: point.y - 40,
+                width: 80,
+                height: 80,
+                animationDelay: `${pointIndex * 0.1}s`
+              }}
+            />
 
-              {/* Secondary pulse */}
-              <div
-                className="stroke-pulse"
-                style={{
-                  left: point.x - 30,
-                  top: point.y - 30,
-                  width: 60,
-                  height: 60,
-                  animationDelay: `${(pathIndex * 5 + pointIndex) * 0.1 + 0.3}s`
-                }}
-              />
-            </React.Fragment>
-          ))
-        )}
+            {/* Secondary pulse */}
+            <div
+              className="stroke-pulse"
+              style={{
+                left: point.x - 30,
+                top: point.y - 30,
+                width: 60,
+                height: 60,
+                animationDelay: `${pointIndex * 0.1 + 0.3}s`
+              }}
+            />
+          </React.Fragment>
+        ))}
 
         {/* Random ripple waves across the canvas */}
         {randomRipplePoints.map((point, index) => {
