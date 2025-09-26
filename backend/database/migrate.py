@@ -3,31 +3,27 @@ Database migration script to create all tables
 """
 
 import sys
-import os
-
-# Add the backend directory to the Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
-from database.connection import engine, Base
-from database.models import Artist, Genre, Artwork, Contour, SearchQuery
+from loguru import logger
+from sqlalchemy import inspect
+from connection import engine, Base
 
 
 def create_tables():
     """Create all database tables"""
-    print("Creating database tables...")
+    logger.debug("Creating database tables...")
 
     try:
         # Create all tables defined in the models
         Base.metadata.create_all(bind=engine)
-        print("✅ All tables created successfully!")
+        logger.info("✅ All tables created successfully!")
 
         # Print created tables
-        inspector = engine.inspect(engine)
+        inspector = inspect(engine)
         tables = inspector.get_table_names()
-        print(f"Created tables: {', '.join(tables)}")
+        logger.info(f"Created tables: {', '.join(tables)}")
 
     except Exception as e:
-        print(f"Error creating tables: {e}")
+        logger.error(f"Error creating tables: {e}")
         return False
 
     return True
