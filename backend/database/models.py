@@ -85,3 +85,22 @@ class Artwork(Base):
         Index("idx_subset_exists", "subset", "exists"),
     )
 
+
+class Contour(Base):
+    """Table to store contour data associated with artworks"""
+
+    __tablename__ = "contours"
+
+    id = Column(Integer, primary_key=True, index=True)
+    artwork_id = Column(Integer, ForeignKey("artworks.id"), nullable=False, index=True)
+    points = Column(Text, nullable=False)  # Store as JSON string
+    image_shape = Column(
+        String(50), nullable=False
+    )  # e.g., "(height, width, channels)"
+    created_at = Column(DateTime, default=func.now())
+
+    # Relationships
+    artwork = relationship("Artwork", back_populates="contours")
+
+    # Indexes
+    __table_args__ = (Index("idx_artwork_id", "artwork_id"),)
