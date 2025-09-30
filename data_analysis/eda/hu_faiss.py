@@ -2,6 +2,7 @@
 import pandas as pd
 import os
 from models import ImageModel, ContourFAISSIndex, ProcrustesResult
+from utils import compute_enhanced_features
 
 import cv2
 import matplotlib.pyplot as plt
@@ -29,66 +30,7 @@ def extract_contours(image: np.ndarray) -> list[np.ndarray]:
     return contours_squeezed
 
 
-def compute_enhanced_features(contour_points: np.ndarray) -> np.ndarray:
-    """Compute enhanced feature vector: Hu moments + additional shape descriptors"""
-    try:
-        contour_points = contour_points.astype(np.float32)
-
-        # 1. Hu moments (7 features)
-        moments = cv2.moments(contour_points)
-        if moments["m00"] == 0:
-            return np.zeros(15, dtype=np.float32)  # Increased feature size
-
-        hu_moments = cv2.HuMoments(moments).flatten()
-        # Log scale transform for better numerical stability and preserve sign
-        hu_moments = -np.sign(hu_moments) * np.log10(np.abs(hu_moments) + 1e-10)
-
-        # 2. Additional shape features
-        area = cv2.contourArea(contour_points)
-        perimeter = cv2.arcLength(contour_points, closed=True)
-
-        # Compactness (circularity)
-        compactness = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
-
-        # Aspect ratio from bounding rectangle
-        rect = cv2.minAreaRect(contour_points)
-        width, height = rect[1]
-        aspect_ratio = max(width, height) / (min(width, height) + 1e-10)
-
-        # Extent (contour area / bounding rectangle area)
-        x, y, w, h = cv2.boundingRect(contour_points)
-        extent = area / (w * h) if (w * h) > 0 else 0
-
-        # Solidity (contour area / convex hull area)
-        hull = cv2.convexHull(contour_points)
-        hull_area = cv2.contourArea(hull)
-        solidity = area / hull_area if hull_area > 0 else 0
-
-        # Contour length (normalized)
-        normalized_length = len(contour_points)
-
-        # Combine all features
-        additional_features = np.array(
-            [
-                compactness,
-                aspect_ratio,
-                extent,
-                solidity,
-                normalized_length,
-                np.log10(area + 1),
-                np.log10(perimeter + 1),
-                np.log10(len(contour_points) + 1),
-            ],
-            dtype=np.float32,
-        )
-
-        # Concatenate Hu moments + additional features
-        enhanced_features = np.concatenate([hu_moments, additional_features])
-        return enhanced_features
-
-    except Exception as e:
-        print(f"Error computing enhanced features: {e}")
-        return np.zeros(15, dtype=np.float32)
+# compute_enhanced_features moved to data_analysis/eda/utils.py
 
 
 def align_contours_with_transform(sketch_pts, target_pts) -> ProcrustesResult:
@@ -113,11 +55,17 @@ def align_contours_with_transform(sketch_pts, target_pts) -> ProcrustesResult:
     # 3. Scale: compute norms
     sketch_norm = np.sqrt((sketch_centered**2).sum())
     target_norm = np.sqrt((target_centered**2).sum())
-    scale = target_norm / sketch_norm if sketch_norm > 0 else 1.0  # How much to scale sketch
+    scale = (
+        target_norm / sketch_norm if sketch_norm > 0 else 1.0
+    )  # How much to scale sketch
 
     # 4. Normalize to unit scale
-    sketch_normalized = sketch_centered / sketch_norm if sketch_norm > 0 else sketch_centered
-    target_normalized = target_centered / target_norm if target_norm > 0 else target_centered
+    sketch_normalized = (
+        sketch_centered / sketch_norm if sketch_norm > 0 else sketch_centered
+    )
+    target_normalized = (
+        target_centered / target_norm if target_norm > 0 else target_centered
+    )
 
     # 5. Rotation: SVD to find optimal rotation matrix
     M = sketch_normalized.T @ target_normalized
@@ -135,7 +83,9 @@ def align_contours_with_transform(sketch_pts, target_pts) -> ProcrustesResult:
 
     # 7. Apply full transform to sketch for disparity calculation
     sketch_transformed_normalized = sketch_normalized @ R.T
-    disparity = np.sqrt(((sketch_transformed_normalized - target_normalized)**2).sum())
+    disparity = np.sqrt(
+        ((sketch_transformed_normalized - target_normalized) ** 2).sum()
+    )
 
     # 8. Compute fully transformed sketch points (for visualization)
     # Apply: center -> rotate -> scale -> translate
@@ -145,23 +95,20 @@ def align_contours_with_transform(sketch_pts, target_pts) -> ProcrustesResult:
 
     return ProcrustesResult(
         disparity=float(disparity),
-        translation={
-            'x': float(translation[0]),
-            'y': float(translation[1])
-        },
+        translation={"x": float(translation[0]), "y": float(translation[1])},
         scale=float(scale),
         rotation_degrees=float(rotation_degrees),
         rotation_radians=float(rotation_angle),
         rotation_matrix=R.tolist(),
         sketch_centroid={
-            'x': float(sketch_centroid[0]),
-            'y': float(sketch_centroid[1])
+            "x": float(sketch_centroid[0]),
+            "y": float(sketch_centroid[1]),
         },
         target_centroid={
-            'x': float(target_centroid[0]),
-            'y': float(target_centroid[1])
+            "x": float(target_centroid[0]),
+            "y": float(target_centroid[1]),
         },
-        transformed_sketch_points=transformed_sketch_points
+        transformed_sketch_points=transformed_sketch_points,
     )
 
 
@@ -309,9 +256,7 @@ def find_best_matches(
         contour = image_ids[img_path].contours[contour_idx]
         try:
             result = align_contours_with_transform(sketch_contour, contour.points)
-            procrustes_results.append(
-                (result, img_path, contour, hu_distance)
-            )
+            procrustes_results.append((result, img_path, contour, hu_distance))
         except Exception:
             continue
 
@@ -352,20 +297,37 @@ if sketch_model.contours:
 
                 # Draw original target contour in red
                 target_pts = np.array(contour.points, dtype=np.int32)
-                ax[i + 1].plot(target_pts[:, 0], target_pts[:, 1],
-                             color="red", linewidth=2, label="Target contour", alpha=0.7)
+                ax[i + 1].plot(
+                    target_pts[:, 0],
+                    target_pts[:, 1],
+                    color="red",
+                    linewidth=2,
+                    label="Target contour",
+                    alpha=0.7,
+                )
 
                 # Draw transformed sketch contour in blue (to show alignment)
-                transformed_pts = np.array(procrustes_result.transformed_sketch_points, dtype=np.int32)
-                ax[i + 1].plot(transformed_pts[:, 0], transformed_pts[:, 1],
-                             color="blue", linewidth=2, label="Transformed sketch", alpha=0.7, linestyle='--')
+                transformed_pts = np.array(
+                    procrustes_result.transformed_sketch_points, dtype=np.int32
+                )
+                ax[i + 1].plot(
+                    transformed_pts[:, 0],
+                    transformed_pts[:, 1],
+                    color="blue",
+                    linewidth=2,
+                    label="Transformed sketch",
+                    alpha=0.7,
+                    linestyle="--",
+                )
 
                 # Add title with all transform info
-                title = (f"Procrustes: {procrustes_result.disparity:.4f}, Hu: {hu_distance:.4f}\n"
-                        f"Scale: {procrustes_result.scale:.2f}, "
-                        f"Rotation: {procrustes_result.rotation_degrees:.1f}°")
+                title = (
+                    f"Procrustes: {procrustes_result.disparity:.4f}, Hu: {hu_distance:.4f}\n"
+                    f"Scale: {procrustes_result.scale:.2f}, "
+                    f"Rotation: {procrustes_result.rotation_degrees:.1f}°"
+                )
                 ax[i + 1].set_title(title, fontsize=9)
-                ax[i + 1].legend(loc='upper right', fontsize=8)
+                ax[i + 1].legend(loc="upper right", fontsize=8)
                 ax[i + 1].axis("off")
 
         plt.tight_layout()
@@ -379,8 +341,12 @@ if sketch_model.contours:
                 f"{i + 1}. Procrustes: {procrustes_result.disparity:.4f}, Hu: {hu_distance:.4f}"
             )
             print(f"   Image: {os.path.basename(img_path)}")
-            print(f"   Transform: scale={procrustes_result.scale:.2f}, rotation={procrustes_result.rotation_degrees:.1f}°")
-            print(f"   Translation: dx={procrustes_result.translation['x']:.1f}, dy={procrustes_result.translation['y']:.1f}")
+            print(
+                f"   Transform: scale={procrustes_result.scale:.2f}, rotation={procrustes_result.rotation_degrees:.1f}°"
+            )
+            print(
+                f"   Translation: dx={procrustes_result.translation['x']:.1f}, dy={procrustes_result.translation['y']:.1f}"
+            )
     else:
         print("No matches found")
 else:

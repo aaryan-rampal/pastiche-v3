@@ -5,7 +5,7 @@ from tqdm import tqdm
 import numpy as np
 import cv2
 from typing import List, Tuple, Optional, Dict
-from hu_faiss import compute_enhanced_features
+from utils import compute_enhanced_features
 
 
 class Contour(BaseModel):
