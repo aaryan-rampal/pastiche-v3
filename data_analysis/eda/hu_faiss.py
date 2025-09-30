@@ -344,31 +344,45 @@ if sketch_model.contours:
         ax[0].set_title("Sketch")
         ax[0].axis("off")
 
-        # Show matches
-        for i, (procrustes_score, img_path, contour, hu_distance) in enumerate(
+        # Show matches with transformed sketch overlay
+        for i, (procrustes_result, img_path, contour, hu_distance) in enumerate(
             best_matches
         ):
             target_img = cv2.imread(img_path, cv2.IMREAD_COLOR)
             if target_img is not None:
                 ax[i + 1].imshow(target_img)
-                pts = np.array(contour.points, dtype=np.int32)
-                ax[i + 1].plot(pts[:, 0], pts[:, 1], color="red", linewidth=2)
-                ax[i + 1].set_title(
-                    f"Procrustes: {procrustes_score:.4f}, Hu: {hu_distance:.4f}"
-                )
+
+                # Draw original target contour in red
+                target_pts = np.array(contour.points, dtype=np.int32)
+                ax[i + 1].plot(target_pts[:, 0], target_pts[:, 1],
+                             color="red", linewidth=2, label="Target contour", alpha=0.7)
+
+                # Draw transformed sketch contour in blue (to show alignment)
+                transformed_pts = np.array(procrustes_result.transformed_sketch_points, dtype=np.int32)
+                ax[i + 1].plot(transformed_pts[:, 0], transformed_pts[:, 1],
+                             color="blue", linewidth=2, label="Transformed sketch", alpha=0.7, linestyle='--')
+
+                # Add title with all transform info
+                title = (f"Procrustes: {procrustes_result.disparity:.4f}, Hu: {hu_distance:.4f}\n"
+                        f"Scale: {procrustes_result.scale:.2f}, "
+                        f"Rotation: {procrustes_result.rotation_degrees:.1f}°")
+                ax[i + 1].set_title(title, fontsize=9)
+                ax[i + 1].legend(loc='upper right', fontsize=8)
                 ax[i + 1].axis("off")
 
         plt.tight_layout()
         plt.show()
 
         print("\nTop matches:")
-        for i, (procrustes_score, img_path, contour, hu_distance) in enumerate(
+        for i, (procrustes_result, img_path, contour, hu_distance) in enumerate(
             best_matches
         ):
             print(
-                f"{i + 1}. Procrustes score: {procrustes_score:.4f}, Hu distance: {hu_distance:.4f}"
+                f"{i + 1}. Procrustes: {procrustes_result.disparity:.4f}, Hu: {hu_distance:.4f}"
             )
             print(f"   Image: {os.path.basename(img_path)}")
+            print(f"   Transform: scale={procrustes_result.scale:.2f}, rotation={procrustes_result.rotation_degrees:.1f}°")
+            print(f"   Translation: dx={procrustes_result.translation['x']:.1f}, dy={procrustes_result.translation['y']:.1f}")
     else:
         print("No matches found")
 else:
