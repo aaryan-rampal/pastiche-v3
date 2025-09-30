@@ -93,13 +93,85 @@ def compute_enhanced_features(contour_points: np.ndarray) -> np.ndarray:
         return np.zeros(15, dtype=np.float32)
 
 
-def align_contours(sketch_pts, target_pts):
-    """Align sketch_pts to target_pts using Procrustes"""
+def align_contours_with_transform(sketch_pts, target_pts) -> ProcrustesResult:
+    """
+    Align sketch_pts to target_pts using Procrustes analysis.
+    Returns full transformation parameters needed for frontend positioning.
+    """
+    # Resample to same number of points
     N = min(len(sketch_pts), len(target_pts))
-    sketch_resampled = sketch_pts[np.linspace(0, len(sketch_pts) - 1, N, dtype=int)]
-    target_resampled = target_pts[np.linspace(0, len(target_pts) - 1, N, dtype=int)]
-    mtx1, mtx2, disparity = procrustes(target_resampled, sketch_resampled)
-    return mtx1, mtx2, disparity
+    sketch = sketch_pts[np.linspace(0, len(sketch_pts) - 1, N, dtype=int)].astype(float)
+    target = target_pts[np.linspace(0, len(target_pts) - 1, N, dtype=int)].astype(float)
+
+    # 1. Translation: compute centroids
+    sketch_centroid = sketch.mean(axis=0)
+    target_centroid = target.mean(axis=0)
+    translation = target_centroid - sketch_centroid  # How much to move sketch
+
+    # 2. Center both shapes at origin
+    sketch_centered = sketch - sketch_centroid
+    target_centered = target - target_centroid
+
+    # 3. Scale: compute norms
+    sketch_norm = np.sqrt((sketch_centered**2).sum())
+    target_norm = np.sqrt((target_centered**2).sum())
+    scale = target_norm / sketch_norm if sketch_norm > 0 else 1.0  # How much to scale sketch
+
+    # 4. Normalize to unit scale
+    sketch_normalized = sketch_centered / sketch_norm if sketch_norm > 0 else sketch_centered
+    target_normalized = target_centered / target_norm if target_norm > 0 else target_centered
+
+    # 5. Rotation: SVD to find optimal rotation matrix
+    M = sketch_normalized.T @ target_normalized
+    U, _, Vt = np.linalg.svd(M)
+    R = U @ Vt  # 2x2 rotation matrix
+
+    # Ensure proper rotation (det = 1, not reflection)
+    if np.linalg.det(R) < 0:
+        Vt[-1, :] *= -1
+        R = U @ Vt
+
+    # 6. Convert rotation matrix to angle
+    rotation_angle = np.arctan2(R[1, 0], R[0, 0])  # radians
+    rotation_degrees = np.degrees(rotation_angle)
+
+    # 7. Apply full transform to sketch for disparity calculation
+    sketch_transformed_normalized = sketch_normalized @ R.T
+    disparity = np.sqrt(((sketch_transformed_normalized - target_normalized)**2).sum())
+
+    # 8. Compute fully transformed sketch points (for visualization)
+    # Apply: center -> rotate -> scale -> translate
+    sketch_rotated = sketch_centered @ R.T
+    sketch_scaled = sketch_rotated * scale
+    transformed_sketch_points = sketch_scaled + target_centroid
+
+    return ProcrustesResult(
+        disparity=float(disparity),
+        translation={
+            'x': float(translation[0]),
+            'y': float(translation[1])
+        },
+        scale=float(scale),
+        rotation_degrees=float(rotation_degrees),
+        rotation_radians=float(rotation_angle),
+        rotation_matrix=R.tolist(),
+        sketch_centroid={
+            'x': float(sketch_centroid[0]),
+            'y': float(sketch_centroid[1])
+        },
+        target_centroid={
+            'x': float(target_centroid[0]),
+            'y': float(target_centroid[1])
+        },
+        transformed_sketch_points=transformed_sketch_points
+    )
+
+
+def align_contours(sketch_pts, target_pts):
+    """Legacy wrapper for backward compatibility"""
+    result = align_contours_with_transform(sketch_pts, target_pts)
+    # Return old format: (mtx1, mtx2, disparity)
+    return result.transformed_sketch_points, target_pts, result.disparity
 
 
 def compute_procrustes_single(args):
@@ -159,104 +231,6 @@ def compute_procrustes_parallel(sketch_contour, faiss_results, n_workers=None):
 
 
 # %%
-class ContourFAISSIndex:
-    def __init__(self, use_weighted_distance=True):
-        self.index = None
-        self.contour_metadata = []  # List of (img_path, contour_idx, contour) tuples
-        self.hu_features = []
-        self.use_weighted_distance = use_weighted_distance
-
-    def build_index(self, image_models: dict[str, ImageModel]):
-        """Build FAISS index from all contours in image models"""
-        print("Computing enhanced features for all contours...")
-
-        feature_vectors = []
-        metadata = []
-
-        for img_path, img_model in tqdm(image_models.items()):
-            for contour_idx, contour in enumerate(img_model.contours):
-                enhanced_features = compute_enhanced_features(contour.points)
-
-                # Skip invalid features
-                if not np.any(np.isnan(enhanced_features)) and not np.any(
-                    np.isinf(enhanced_features)
-                ):
-                    feature_vectors.append(enhanced_features)
-                    metadata.append((img_path, contour_idx))
-
-        if not feature_vectors:
-            raise ValueError("No valid features computed")
-
-        # Convert to numpy array
-        self.hu_features = np.array(feature_vectors, dtype=np.float32)
-        self.contour_metadata = metadata
-
-        # Optionally normalize features for better FAISS performance
-        if self.use_weighted_distance:
-            # Normalize each feature dimension
-            mean = np.mean(self.hu_features, axis=0)
-            std = np.std(self.hu_features, axis=0) + 1e-8
-            self.hu_features = (self.hu_features - mean) / std
-            self.feature_mean = mean
-            self.feature_std = std
-
-        # Build FAISS index (L2 distance)
-        dimension = len(feature_vectors[0])  # Enhanced features dimension
-        self.index = faiss.IndexFlatL2(dimension)
-        self.index.add(self.hu_features)
-
-        print(
-            f"Built FAISS index with {len(self.hu_features)} contours, {dimension}D features"
-        )
-
-    def search_similar_contours(self, sketch_contour: np.ndarray, k: int = 100):
-        """Find k most similar contours using enhanced features"""
-        if self.index is None:
-            raise ValueError("Index not built yet")
-
-        sketch_features = compute_enhanced_features(sketch_contour)
-        if np.any(np.isnan(sketch_features)) or np.any(np.isinf(sketch_features)):
-            print("Warning: Invalid features for sketch")
-            return []
-
-        # Apply same normalization as training data
-        if self.use_weighted_distance:
-            sketch_features = (sketch_features - self.feature_mean) / self.feature_std
-
-        # Search FAISS index
-        distances, indices = self.index.search(
-            sketch_features.reshape(1, -1), k
-        )  # Return metadata for found contours
-        results = []
-        for i, idx in enumerate(indices[0]):
-            if idx < len(self.contour_metadata):
-                img_path, contour_idx = self.contour_metadata[idx]
-                results.append((distances[0][i], img_path, contour_idx))
-
-        return results
-
-    def save_index(self, filepath: str):
-        """Save the FAISS index and metadata"""
-        faiss.write_index(self.index, f"{filepath}.faiss")
-        with open(f"{filepath}_metadata.pkl", "wb") as f:
-            pickle.dump(
-                {
-                    "contour_metadata": self.contour_metadata,
-                    "hu_features": self.hu_features,
-                },
-                f,
-            )
-        print(f"Saved index to {filepath}")
-
-    def load_index(self, filepath: str):
-        """Load the FAISS index and metadata"""
-        self.index = faiss.read_index(f"{filepath}.faiss")
-        with open(f"{filepath}_metadata.pkl", "rb") as f:
-            data = pickle.load(f)
-            self.contour_metadata = data["contour_metadata"]
-            self.hu_features = data["hu_features"]
-        print(f"Loaded index from {filepath}")
-
 
 # %%
 # Load and process images
