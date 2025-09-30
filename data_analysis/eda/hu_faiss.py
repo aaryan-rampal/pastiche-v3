@@ -43,6 +43,7 @@ def compute_enhanced_features(contour_points: np.ndarray) -> np.ndarray:
             return np.zeros(15, dtype=np.float32)  # Increased feature size
 
         hu_moments = cv2.HuMoments(moments).flatten()
+        # Log scale transform for better numerical stability and preserve sign
         hu_moments = -np.sign(hu_moments) * np.log10(np.abs(hu_moments) + 1e-10)
 
         # 2. Additional shape features
@@ -67,7 +68,7 @@ def compute_enhanced_features(contour_points: np.ndarray) -> np.ndarray:
         solidity = area / hull_area if hull_area > 0 else 0
 
         # Contour length (normalized)
-        normalized_length = len(contour_points) / 1000.0  # Normalize by typical length
+        normalized_length = len(contour_points)
 
         # Combine all features
         additional_features = np.array(
@@ -79,7 +80,7 @@ def compute_enhanced_features(contour_points: np.ndarray) -> np.ndarray:
                 normalized_length,
                 np.log10(area + 1),
                 np.log10(perimeter + 1),
-                np.log10(len(contour_points)),
+                np.log10(len(contour_points) + 1),
             ],
             dtype=np.float32,
         )
