@@ -1,7 +1,11 @@
 from pydantic import BaseModel, Field, model_validator
+import faiss
+import pickle
+from tqdm import tqdm
 import numpy as np
 import cv2
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
+from hu_faiss import compute_enhanced_features
 
 
 class Contour(BaseModel):

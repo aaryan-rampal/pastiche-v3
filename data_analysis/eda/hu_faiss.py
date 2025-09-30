@@ -1,15 +1,12 @@
 # %%
 import pandas as pd
 import os
-from models import ImageModel
+from models import ImageModel, ContourFAISSIndex, ProcrustesResult
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-import faiss
-from scipy.spatial import procrustes
-import pickle
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
 
