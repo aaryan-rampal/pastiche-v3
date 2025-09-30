@@ -310,15 +310,15 @@ def find_best_matches(
     for hu_distance, img_path, contour_idx in tqdm(faiss_results):
         contour = image_ids[img_path].contours[contour_idx]
         try:
-            _, _, procrustes_score = align_contours(sketch_contour, contour.points)
+            result = align_contours_with_transform(sketch_contour, contour.points)
             procrustes_results.append(
-                (procrustes_score, img_path, contour, hu_distance)
+                (result, img_path, contour, hu_distance)
             )
         except Exception:
             continue
 
     # Sort by Procrustes score (lower is better)
-    procrustes_results.sort(key=lambda x: x[0])
+    procrustes_results.sort(key=lambda x: x[0].disparity)
     return procrustes_results[:top_k_final]
 
 
