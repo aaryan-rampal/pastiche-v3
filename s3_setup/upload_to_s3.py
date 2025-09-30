@@ -34,7 +34,7 @@ class S3ArtworkUploader:
         try:
             self.s3_client.head_bucket(Bucket=self.bucket_name)
             print(f"Bucket {self.bucket_name} already exists")
-        except Exception as e:
+        except Exception:
             print(f"Creating bucket {self.bucket_name}")
             if self.region == "us-east-1":
                 self.s3_client.create_bucket(Bucket=self.bucket_name)

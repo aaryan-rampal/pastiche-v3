@@ -1,6 +1,7 @@
 # %%
 import os
 import pandas as pd
+
 # %%
 DATA_DIR = "/Volumes/Extreme SSD/wikiart"
 # %%

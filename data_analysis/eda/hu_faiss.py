@@ -1,6 +1,5 @@
 # %%
 import pandas as pd
-import random
 import os
 from models import ImageModel
 

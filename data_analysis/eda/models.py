@@ -35,7 +35,9 @@ class Contour(BaseModel):
     @model_validator(mode="after")
     def compute_derived_fields(self):
         self.length = self.points.shape[0] / (self.image_shape[0] * self.image_shape[1])
-        self.area = cv2.contourArea(self.points) / (self.image_shape[0] * self.image_shape[1])
+        self.area = cv2.contourArea(self.points) / (
+            self.image_shape[0] * self.image_shape[1]
+        )
 
         if self.length < self.min_length:
             raise ValueError(f"Contour too short: {self.length}")
@@ -68,5 +70,5 @@ class ImageModel(BaseModel):
                     image_shape=self.image_shape,
                 )
                 self.contours.append(contour)
-            except ValueError as e:
+            except ValueError:
                 pass

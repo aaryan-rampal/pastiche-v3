@@ -6,7 +6,6 @@ from models import ImageModel, Contour
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image, ImageFile
 from tqdm import tqdm
 
 # %%
@@ -174,6 +173,7 @@ print(f"Extracted {len(sketch_model.contours)} contours from sketch")
 from scipy.spatial import procrustes
 import heapq
 
+
 def align_contours(sketch_pts, target_pts):
     """
     Align sketch_pts to target_pts using Procrustes.
@@ -194,7 +194,9 @@ n_minimum = 5
 best_scores: list[tuple[float, str, Contour]] = []  # (score, img_path, contour)
 for img_path, img_model in tqdm(image_ids.items()):
     for contour in img_model.contours:
-        mtx1, mtx2, score = align_contours(sketch_pts=sketch_model.contours[0].points, target_pts=contour.points)
+        mtx1, mtx2, score = align_contours(
+            sketch_pts=sketch_model.contours[0].points, target_pts=contour.points
+        )
         heapq.heappush(best_scores, (score, img_path, contour))
 # %%
 best_scores = heapq.nsmallest(n_minimum, best_scores)

@@ -177,7 +177,7 @@ def main():
         img_file, npy_file = app.save_drawing(filename)
 
         if img_file and npy_file:
-            print(f"\nFiles saved successfully!")
+            print("\nFiles saved successfully!")
             print(f"Image: {img_file}")
             print(f"NumPy array: {npy_file}")
 
