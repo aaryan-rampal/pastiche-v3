@@ -4,7 +4,7 @@ import pickle
 from tqdm import tqdm
 import numpy as np
 import cv2
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional, Dict, Any
 from utils import compute_hu_moments
 
 
@@ -37,7 +37,15 @@ class Contour(BaseModel):
     )
 
     @model_validator(mode="after")
-    def compute_derived_fields(self):
+    def compute_derived_fields(self) -> "Contour":
+        """Compute derived numeric fields for the contour.
+
+        Returns:
+            Contour: the same model instance with `length` and `area` populated.
+
+        Raises:
+            ValueError: if contour is too short or has too small area based on thresholds.
+        """
         self.length = self.points.shape[0] / (self.image_shape[0] * self.image_shape[1])
         self.area = cv2.contourArea(self.points) / (
             self.image_shape[0] * self.image_shape[1]
@@ -45,13 +53,10 @@ class Contour(BaseModel):
 
         if self.length < self.min_length:
             raise ValueError(f"Contour too short: {self.length}")
-        # if self.length > self.max_length:
-        #     raise ValueError(f"Contour too long: {self.length}")
 
         if self.area < self.min_area:
             raise ValueError(f"Contour area too small: {self.area}")
-        # if self.area > self.max_area:
-        #     raise ValueError(f"Contour area too large: {self.area}")
+
         return self
 
 
@@ -64,7 +69,16 @@ class ImageModel(BaseModel):
         default_factory=list, description="List of contours for the image"
     )
 
-    def add_contours(self, contours: List[np.ndarray]):
+    def add_contours(self, contours: List[np.ndarray]) -> None:
+        """Add contours (numpy arrays) to this ImageModel.
+
+        Args:
+            contours: list of numpy arrays, each shape (N,2).
+
+        Behavior:
+            Appends valid `Contour` models to `self.contours`. Invalid contours
+            (that fail validation) are skipped silently.
+        """
         # contours is a list of np.ndarray of shape (N, 2)
         for contour_points in contours:
             try:
@@ -75,6 +89,7 @@ class ImageModel(BaseModel):
                 )
                 self.contours.append(contour)
             except ValueError:
+                # Invalid contours are ignored
                 pass
 
 
@@ -110,14 +125,31 @@ class ProcrustesResult(BaseModel):
 
 
 class ContourFAISSIndex:
-    def __init__(self, use_weighted_distance=True):
-        self.index = None
-        self.contour_metadata = []  # List of (img_path, contour_idx, contour) tuples
-        self.hu_features = []
-        self.use_weighted_distance = use_weighted_distance
+    def __init__(self, use_weighted_distance: bool = True) -> None:
+        """FAISS index wrapper for contour features.
 
-    def build_index(self, image_models: dict[str, ImageModel]):
-        """Build FAISS index from all contours in image models"""
+        Attributes set on build:
+            - self.index: faiss index instance
+            - self.contour_metadata: List[Tuple[str,int]] mapping index rows to (img_path, contour_idx)
+            - self.hu_features: numpy array of feature vectors used to build the index
+        """
+        self.index: Optional[faiss.Index] = None
+        self.contour_metadata: List[
+            Tuple[str, int]
+        ] = []  # mapping index row -> (img_path, contour_idx)
+        self.hu_features: Optional[np.ndarray] = None
+        self.use_weighted_distance: bool = use_weighted_distance
+
+    def build_index(self, image_models: Dict[str, ImageModel]) -> None:
+        """Build FAISS index from all contours in image models.
+
+        Side effects:
+            - sets self.index (faiss Index)
+            - sets self.hu_features (np.ndarray)
+            - sets self.contour_metadata (list of (img_path, contour_idx))
+        Returns:
+            None
+        """
         print("Computing enhanced features for all contours...")
 
         feature_vectors = []
@@ -156,11 +188,22 @@ class ContourFAISSIndex:
         self.index.add(self.hu_features)
 
         print(
-            f"Built FAISS index with {len(self.hu_features)} contours, {dimension}D features"
+            f"Built FAISS index with {self.hu_features.shape[0]} contours, {dimension}D features"
         )
 
-    def search_similar_contours(self, sketch_contour: np.ndarray, k: int = 100):
-        """Find k most similar contours using enhanced features"""
+    def search_similar_contours(
+        self, sketch_contour: np.ndarray, k: int = 100
+    ) -> List[Tuple[float, str, int]]:
+        """Find k most similar contours using enhanced features.
+
+        Args:
+            sketch_contour: numpy array of sketch points (N,2) to query
+            k: number of neighbors to return
+
+        Returns:
+            List of tuples (distance, img_path, contour_idx). Distance uses
+            L2 as returned by FAISS IndexFlatL2 (lower is more similar).
+        """
         if self.index is None:
             raise ValueError("Index not built yet")
 
@@ -185,8 +228,14 @@ class ContourFAISSIndex:
 
         return results
 
-    def save_index(self, filepath: str):
-        """Save the FAISS index and metadata"""
+    def save_index(self, filepath: str) -> None:
+        """Save the FAISS index and metadata to disk.
+
+        Files produced:
+            - {filepath}.faiss : binary FAISS index
+            - {filepath}_metadata.pkl : pickled metadata dict with keys
+              'contour_metadata' and 'hu_features'
+        """
         faiss.write_index(self.index, f"{filepath}.faiss")
         with open(f"{filepath}_metadata.pkl", "wb") as f:
             pickle.dump(
@@ -198,8 +247,12 @@ class ContourFAISSIndex:
             )
         print(f"Saved index to {filepath}")
 
-    def load_index(self, filepath: str):
-        """Load the FAISS index and metadata"""
+    def load_index(self, filepath: str) -> None:
+        """Load the FAISS index and metadata from disk.
+
+        After calling this, `self.index`, `self.contour_metadata` and
+        `self.hu_features` will be populated.
+        """
         self.index = faiss.read_index(f"{filepath}.faiss")
         with open(f"{filepath}_metadata.pkl", "rb") as f:
             data = pickle.load(f)
