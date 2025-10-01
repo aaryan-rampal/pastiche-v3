@@ -1,6 +1,7 @@
 """API router for sketch matching endpoints."""
 
 from loguru import logger
+from core.config import settings
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -65,10 +66,12 @@ class MatchRequestBody(BaseModel):
         ..., description="List of points representing the sketch contour"
     )
     top_k_faiss: int = Field(
-        default=1000, description="Number of candidates to retrieve from FAISS"
+        default=settings.faiss_top_k,
+        description="Number of candidates to retrieve from FAISS",
     )
     top_k_final: int = Field(
-        default=10, description="Number of final results to return after Procrustes"
+        default=settings.procrustes_top_k,
+        description="Number of final results to return after Procrustes",
     )
 
 
@@ -86,7 +89,7 @@ async def match_sketch_points(
     """
     try:
         # Convert points to numpy array
-        logger.info(request.points)
+        logger.debug("Converting points to numpy array")
         sketch_contour = request.points.to_numpy()
 
         if len(sketch_contour) < 3:
@@ -94,13 +97,15 @@ async def match_sketch_points(
                 status_code=400,
                 detail="At least 3 points are required for matching.",
             )
-        logger.info(f"Sketch contour has {len(sketch_contour)} points")
+        logger.debug(f"Sketch contour has {len(sketch_contour)} points")
 
         # Stage 1: FAISS search for initial candidates
         faiss_results = faiss_service.search_similar_contours(
             sketch_contour, k=request.top_k_faiss
         )
-        logger.info(f"FAISS results: {faiss_results}")
+        logger.debug(f"FAISS results: {faiss_results}")
+        faiss_results = faiss_results[: settings.faiss_top_k]
+        logger.info(f"FAISS returned {len(faiss_results)} candidates")
 
         if not faiss_results:
             raise HTTPException(
