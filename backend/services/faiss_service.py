@@ -1,5 +1,7 @@
 """Service for FAISS index operations."""
 
+from core.config import settings
+
 from pathlib import Path
 from loguru import logger
 from typing import List, Tuple, Optional
@@ -36,10 +38,12 @@ class FAISSService:
 
         self._index = ContourFAISSIndex(use_weighted_distance=True)
         self._index.load_index(index_path)
-        print(f"FAISS index loaded with {len(self._index.contour_metadata_s3)} contours")
+        print(
+            f"FAISS index loaded with {len(self._index.contour_metadata_s3)} contours"
+        )
 
     def search_similar_contours(
-        self, sketch_contour: np.ndarray, k: int = 100
+        self, sketch_contour: np.ndarray, k: int = settings.faiss_top_k
     ) -> List[Tuple[float, str, int]]:
         """Search for similar contours using FAISS index.
 
