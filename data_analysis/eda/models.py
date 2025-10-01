@@ -5,7 +5,7 @@ from tqdm import tqdm
 import numpy as np
 import cv2
 from typing import List, Tuple, Optional, Dict
-from utils import compute_enhanced_features
+from utils import compute_hu_moments
 
 
 class Contour(BaseModel):
@@ -33,7 +33,7 @@ class Contour(BaseModel):
     )
     min_area: float = Field(default=1e-5, description="Minimum allowed normalized area")
     min_length: float = Field(
-        default=1e-5, description="Minimum allowed normalized length"
+        default=1e-4, description="Minimum allowed normalized length"
     )
 
     @model_validator(mode="after")
@@ -125,13 +125,13 @@ class ContourFAISSIndex:
 
         for img_path, img_model in tqdm(image_models.items()):
             for contour_idx, contour in enumerate(img_model.contours):
-                enhanced_features = compute_enhanced_features(contour.points)
+                hu_moments = compute_hu_moments(contour.points)
 
                 # Skip invalid features
-                if not np.any(np.isnan(enhanced_features)) and not np.any(
-                    np.isinf(enhanced_features)
+                if not np.any(np.isnan(hu_moments)) and not np.any(
+                    np.isinf(hu_moments)
                 ):
-                    feature_vectors.append(enhanced_features)
+                    feature_vectors.append(hu_moments)
                     metadata.append((img_path, contour_idx))
 
         if not feature_vectors:
@@ -164,18 +164,18 @@ class ContourFAISSIndex:
         if self.index is None:
             raise ValueError("Index not built yet")
 
-        sketch_features = compute_enhanced_features(sketch_contour)
-        if np.any(np.isnan(sketch_features)) or np.any(np.isinf(sketch_features)):
+        sketch_moments = compute_hu_moments(sketch_contour)
+        if np.any(np.isnan(sketch_moments)) or np.any(np.isinf(sketch_moments)):
             print("Warning: Invalid features for sketch")
             return []
 
         # Apply same normalization as training data
         if self.use_weighted_distance:
-            sketch_features = (sketch_features - self.feature_mean) / self.feature_std
+            sketch_moments = (sketch_moments - self.feature_mean) / self.feature_std
 
         # Search FAISS index
         distances, indices = self.index.search(
-            sketch_features.reshape(1, -1), k
+            sketch_moments.reshape(1, -1), k
         )  # Return metadata for found contours
         results = []
         for i, idx in enumerate(indices[0]):
