@@ -118,7 +118,7 @@ async def match_sketch_points(
             sketch_contour, faiss_results, top_k=request.top_k_final
         )
 
-        # Build response
+        # Build all candidate matches
         matches = []
         for (
             procrustes_result,
@@ -148,7 +148,20 @@ async def match_sketch_points(
             )
             matches.append(match)
 
-        logger.info(f"Returning {len(matches)} matches")
+        # Use exponential distribution to select one match
+        # Earlier results (better Procrustes scores) are weighted more heavily
+        if len(matches) > 0:
+            # Generate exponential weights (decay rate = 1.0)
+            weights = np.exp(-np.arange(len(matches)))
+            # Normalize to probabilities
+            probabilities = weights / weights.sum()
+            # Randomly select one index based on probabilities
+            selected_idx = np.random.choice(len(matches), p=probabilities)
+            selected_match = matches[selected_idx]
+            matches = [selected_match]
+            logger.info(f"Selected match {selected_idx} from {len(procrustes_results)} candidates using exponential distribution")
+
+        logger.info(f"Returning {len(matches)} match(es)")
 
         return MatchResponse(
             matches=matches,
