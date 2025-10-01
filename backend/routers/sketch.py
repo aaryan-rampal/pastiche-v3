@@ -1,4 +1,6 @@
 """API router for sketch matching endpoints."""
+
+from loguru import logger
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -7,6 +9,7 @@ import numpy as np
 from services.contour_service import extract_contours_from_image_bytes
 from services.faiss_service import FAISSService
 from services.procrustes_service import ProcrustesService
+from models.schemas import PointInput
 
 router = APIRouter(prefix="/api/sketch", tags=["sketch"])
 
@@ -33,9 +36,13 @@ class MatchResult(BaseModel):
     artwork_url: Optional[str] = Field(
         None, description="Public URL to artwork (if available)"
     )
-    procrustes_score: float = Field(..., description="Procrustes disparity (lower is better)")
+    procrustes_score: float = Field(
+        ..., description="Procrustes disparity (lower is better)"
+    )
     hu_distance: float = Field(..., description="Hu moment distance from FAISS")
-    transform: TransformParams = Field(..., description="Transform parameters for alignment")
+    transform: TransformParams = Field(
+        ..., description="Transform parameters for alignment"
+    )
     contour_idx: int = Field(..., description="Index of matched contour in artwork")
 
 
@@ -51,42 +58,49 @@ class MatchResponse(BaseModel):
     )
 
 
-@router.post("/match", response_model=MatchResponse)
-async def match_sketch(
-    sketch: UploadFile = File(..., description="Sketch image (PNG, JPEG, etc.)"),
-    top_k_faiss: int = 1000,
-    top_k_final: int = 10,
+class MatchRequestBody(BaseModel):
+    """Request body for matching with points input."""
+
+    points: PointInput = Field(
+        ..., description="List of points representing the sketch contour"
+    )
+    top_k_faiss: int = Field(
+        default=1000, description="Number of candidates to retrieve from FAISS"
+    )
+    top_k_final: int = Field(
+        default=10, description="Number of final results to return after Procrustes"
+    )
+
+
+@router.post("/match-points", response_model=MatchResponse)
+async def match_sketch_points(
+    request: MatchRequestBody,
 ) -> MatchResponse:
-    """Match a sketch to artworks using Hu moments + Procrustes analysis.
+    """Match a sketch to artworks using points input.
 
     Args:
-        sketch: Uploaded sketch image file
-        top_k_faiss: Number of candidates to retrieve from FAISS (default: 1000)
-        top_k_final: Number of final results to return after Procrustes (default: 10)
+        request: Request body containing points and search parameters
 
     Returns:
         MatchResponse with matched artworks and transformation parameters
     """
     try:
-        # Read sketch image bytes
-        sketch_bytes = await sketch.read()
+        # Convert points to numpy array
+        logger.info(request.points)
+        sketch_contour = request.points.to_numpy()
 
-        # Extract contours from sketch
-        sketch_contours = extract_contours_from_image_bytes(sketch_bytes)
-
-        if not sketch_contours:
+        if len(sketch_contour) < 3:
             raise HTTPException(
                 status_code=400,
-                detail="No contours found in sketch. Try drawing with stronger/thicker lines.",
+                detail="At least 3 points are required for matching.",
             )
-
-        # Use the first (largest) contour for matching
-        sketch_contour = sketch_contours[0]
+        logger.info(f"Sketch contour has {len(sketch_contour)} points")
 
         # Stage 1: FAISS search for initial candidates
         faiss_results = faiss_service.search_similar_contours(
-            sketch_contour, k=top_k_faiss
+            sketch_contour, k=request.top_k_faiss
         )
+        logger.info(f"FAISS results: {faiss_results}")
 
         if not faiss_results:
             raise HTTPException(
@@ -96,12 +110,17 @@ async def match_sketch(
 
         # Stage 2: Procrustes refinement
         procrustes_results = procrustes_service.compute_procrustes_batch(
-            sketch_contour, faiss_results, top_k=top_k_final
+            sketch_contour, faiss_results, top_k=request.top_k_final
         )
 
         # Build response
         matches = []
-        for procrustes_result, img_path, contour_points, hu_distance in procrustes_results:
+        for (
+            procrustes_result,
+            img_path,
+            contour_points,
+            hu_distance,
+        ) in procrustes_results:
             # Extract contour index from faiss_results
             contour_idx = next(
                 (idx for _, path, idx in faiss_results if path == img_path), 0
@@ -124,9 +143,11 @@ async def match_sketch(
             )
             matches.append(match)
 
+        logger.info(f"Returning {len(matches)} matches")
+
         return MatchResponse(
             matches=matches,
-            sketch_contours_found=len(sketch_contours),
+            sketch_contours_found=1,
             faiss_candidates=len(faiss_results),
         )
 
