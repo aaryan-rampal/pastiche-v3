@@ -1,4 +1,5 @@
 """Application configuration."""
+
 from pydantic_settings import BaseSettings
 from typing import List
 
@@ -20,11 +21,13 @@ class Settings(BaseSettings):
     ]
 
     # AWS Configuration
-    aws_s3_bucket: str = "pastiche-v3"
-    aws_region: str = "us-east-1"
+    aws_s3_bucket: str = ""
+    aws_region: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
 
     # FAISS Configuration
-    faiss_top_k: int = 1000
+    faiss_top_k: int = 50
     procrustes_top_k: int = 10
 
     class Config:
