@@ -14,7 +14,7 @@ import multiprocessing as mp
 DATA_DIR: str = "/Volumes/Extreme SSD/wikiart/"
 lo: int = 150
 hi: int = 200
-TRUNCATE: int = -1  # Set to positive integer to limit number of images processed
+TRUNCATE: int = 500  # Set to positive integer to limit number of images processed
 
 # %%
 df = pd.read_csv("../../data/classes_truncated.csv")
@@ -215,6 +215,10 @@ sketch_img = cv2.imread(sketch_path, cv2.IMREAD_GRAYSCALE)
 if sketch_img is None:
     raise ValueError("Failed to load sketch image")
 
+# rotate sketch by 30 degrees for testing
+# (uncomment to test rotation invariance)
+sketch_img = cv2.rotate(sketch_img, cv2.ROTATE_90_CLOCKWISE)
+
 plt.figure(figsize=(8, 8))
 plt.imshow(sketch_img, cmap="gray")
 plt.title("Sketch Image")
@@ -326,7 +330,9 @@ if sketch_model.contours:
                 title = (
                     f"Procrustes: {procrustes_result.disparity:.4f}, Hu: {hu_distance:.4f}\n"
                     f"Scale: {procrustes_result.scale:.2f}, "
-                    f"Rotation: {procrustes_result.rotation_degrees:.1f}°"
+                    f"Rotation: {procrustes_result.rotation_degrees:.1f}°, \n"
+                    f"Contour length: {len(contour.points)}, Image Size: {target_img.shape[1]}x{target_img.shape[0]}\n"
+                    f"Contour Percent of Image: {len(contour.points) / (target_img.shape[0] * target_img.shape[1]):.6f}"
                 )
                 ax[i + 1].set_title(title, fontsize=9)
                 ax[i + 1].legend(loc="upper right", fontsize=8)
