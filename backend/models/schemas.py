@@ -1,11 +1,17 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
+from loguru import logger
 import faiss
 import pickle
 from tqdm import tqdm
 import numpy as np
 import cv2
-from typing import List, Tuple, Optional, Dict, Any
-from utils import compute_hu_moments
+from typing import List, Tuple, Optional, Dict
+import sys
+import os
+
+# Add parent directory to path to import utils
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from utils.image_utils import compute_hu_moments
 
 
 class Contour(BaseModel):
@@ -93,6 +99,27 @@ class ImageModel(BaseModel):
                 pass
 
 
+class PointInput(BaseModel):
+    """Input model for a list of points representing a contour."""
+
+    points: List[List[float]] = Field(..., description="List of [x, y] coordinates")
+
+    @field_validator("points")
+    @classmethod
+    def validate_points(cls, v):
+        """Validate that points is a non-empty list of [x, y] coordinates."""
+        if not v:
+            raise ValueError("Points list cannot be empty")
+        for point in v:
+            if len(point) != 2:
+                raise ValueError("Each point must be a list of [x, y] coordinates")
+        return v
+
+    def to_numpy(self) -> np.ndarray:
+        """Convert points to numpy array."""
+        return np.array(self.points, dtype=np.float32)
+
+
 class ProcrustesResult(BaseModel):
     """Result of Procrustes analysis with full transformation parameters"""
 
@@ -134,9 +161,6 @@ class ContourFAISSIndex:
             - self.hu_features: numpy array of feature vectors used to build the index
         """
         self.index: Optional[faiss.Index] = None
-        self.contour_metadata: List[
-            Tuple[str, int]
-        ] = []  # mapping index row -> (img_path, contour_idx)
         self.contour_metadata_s3: List[Tuple[str, int]] = []  # S3 path version
 
         self.hu_features: Optional[np.ndarray] = None
@@ -199,7 +223,7 @@ class ContourFAISSIndex:
         )
 
     def search_similar_contours(
-        self, sketch_contour: np.ndarray, k: int = 100
+        self, sketch_contour: np.ndarray, k: int
     ) -> List[Tuple[float, str, int]]:
         """Find k most similar contours using enhanced features.
 
@@ -220,8 +244,9 @@ class ContourFAISSIndex:
             return []
 
         # Apply same normalization as training data
-        if self.use_weighted_distance:
-            sketch_moments = (sketch_moments - self.feature_mean) / self.feature_std
+        # logger.info(self.use_weighted_distance)
+        # if self.use_weighted_distance:
+        #     sketch_moments = (sketch_moments - self.feature_mean) / self.feature_std
 
         # Search FAISS index
         distances, indices = self.index.search(
@@ -229,8 +254,8 @@ class ContourFAISSIndex:
         )  # Return metadata for found contours
         results = []
         for i, idx in enumerate(indices[0]):
-            if idx < len(self.contour_metadata):
-                img_path, contour_idx = self.contour_metadata[idx]
+            if idx < len(self.contour_metadata_s3):
+                img_path, contour_idx = self.contour_metadata_s3[idx]
                 results.append((distances[0][i], img_path, contour_idx))
 
         return results
@@ -270,11 +295,6 @@ class ContourFAISSIndex:
         `self.hu_features` will be populated.
         """
         self.index = faiss.read_index(f"{filepath}.faiss")
-        with open(f"{filepath}_metadata.pkl", "rb") as f:
-            data = pickle.load(f)
-            self.contour_metadata = data["contour_metadata"]
-            self.hu_features = data["hu_features"]
-        print(f"Loaded index from {filepath}")
 
         with open(f"{filepath}_metadata_s3.pkl", "rb") as f:
             data = pickle.load(f)
