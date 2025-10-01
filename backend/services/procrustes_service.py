@@ -5,6 +5,7 @@ from loguru import logger
 import numpy as np
 from typing import List, Tuple
 import cv2
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from models.schemas import ProcrustesResult
 from services.contour_service import extract_contours_from_image_bytes
 from core.s3_settings import get_s3_client, AWS_S3_BUCKET
@@ -158,41 +159,82 @@ class ProcrustesService:
 
         return contours[contour_idx], image.shape
 
+    def _process_single_candidate(
+        self,
+        sketch_contour: np.ndarray,
+        hu_distance: float,
+        img_path: str,
+        contour_idx: int,
+    ) -> Tuple[ProcrustesResult, str, np.ndarray, float]:
+        """Process a single FAISS candidate: fetch from S3, extract contour, compute Procrustes.
+
+        Args:
+            sketch_contour: Sketch contour points (N, 2)
+            hu_distance: Hu moment distance from FAISS
+            img_path: S3 path to artwork image
+            contour_idx: Index of contour to extract
+
+        Returns:
+            Tuple of (ProcrustesResult, img_path, contour_points, hu_distance)
+
+        Raises:
+            Exception: If processing fails
+        """
+        # Extract contour from S3 image
+        contour_points, _ = self.extract_contour_from_s3_image(img_path, contour_idx)
+
+        # Compute Procrustes alignment
+        result = align_contours_with_transform(sketch_contour, contour_points)
+
+        return (result, img_path, contour_points, hu_distance)
+
     def compute_procrustes_batch(
         self,
         sketch_contour: np.ndarray,
         faiss_results: List[Tuple[float, str, int]],
         top_k: int = 10,
+        max_workers: int = 10,
     ) -> List[Tuple[ProcrustesResult, str, np.ndarray, float]]:
-        """Compute Procrustes alignment for FAISS candidates.
+        """Compute Procrustes alignment for FAISS candidates in parallel.
 
         Args:
             sketch_contour: Sketch contour points (N, 2)
             faiss_results: List of (hu_distance, img_path, contour_idx) from FAISS
             top_k: Number of top results to return after Procrustes refinement
+            max_workers: Maximum number of parallel workers for S3 fetching
 
         Returns:
             List of (ProcrustesResult, img_path, contour_points, hu_distance) sorted by disparity
         """
         procrustes_results = []
-        logger.info(f"Computing Procrustes for {len(faiss_results)} candidates")
+        logger.info(f"Computing Procrustes for {len(faiss_results)} candidates (parallel with {max_workers} workers)")
 
-        for hu_distance, img_path, contour_idx in faiss_results:
-            try:
-                # Extract contour from S3 image
-                contour_points, _ = self.extract_contour_from_s3_image(
-                    img_path, contour_idx
-                )
+        # Process candidates in parallel using ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_candidate = {
+                executor.submit(
+                    self._process_single_candidate,
+                    sketch_contour,
+                    hu_distance,
+                    img_path,
+                    contour_idx
+                ): (hu_distance, img_path, contour_idx)
+                for hu_distance, img_path, contour_idx in faiss_results
+            }
 
-                # Compute Procrustes alignment
-                result = align_contours_with_transform(sketch_contour, contour_points)
+            # Collect results as they complete
+            for future in as_completed(future_to_candidate):
+                candidate = future_to_candidate[future]
+                try:
+                    result = future.result()
+                    procrustes_results.append(result)
+                except Exception as e:
+                    hu_distance, img_path, contour_idx = candidate
+                    logger.error(f"Error processing {img_path}[{contour_idx}]: {e}")
+                    continue
 
-                procrustes_results.append(
-                    (result, img_path, contour_points, hu_distance)
-                )
-            except Exception as e:
-                print(f"Error processing {img_path}[{contour_idx}]: {e}")
-                continue
+        logger.info(f"Successfully processed {len(procrustes_results)} candidates")
 
         # Sort by Procrustes disparity (lower is better)
         procrustes_results.sort(key=lambda x: x[0].disparity)
