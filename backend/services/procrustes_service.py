@@ -1,10 +1,13 @@
 """Service for Procrustes analysis and shape alignment."""
+
+from loguru import logger
+
 import numpy as np
 from typing import List, Tuple
-import boto3
 import cv2
 from models.schemas import ProcrustesResult
 from services.contour_service import extract_contours_from_image_bytes
+from core.s3_settings import get_s3_client, AWS_S3_BUCKET
 
 
 def align_contours_with_transform(
@@ -98,14 +101,14 @@ def align_contours_with_transform(
 class ProcrustesService:
     """Service for computing Procrustes alignment on contour candidates."""
 
-    def __init__(self, s3_bucket: str = "pastiche-v3"):
+    def __init__(self, s3_bucket: str = None):
         """Initialize Procrustes service.
 
         Args:
-            s3_bucket: S3 bucket name where artwork images are stored
+            s3_bucket: S3 bucket name where artwork images are stored (defaults to AWS_S3_BUCKET from env)
         """
-        self.s3_client = boto3.client("s3")
-        self.s3_bucket = s3_bucket
+        self.s3_client = get_s3_client()
+        self.s3_bucket = s3_bucket or AWS_S3_BUCKET
 
     def load_image_from_s3(self, s3_key: str) -> np.ndarray:
         """Load image from S3 and return as grayscale numpy array.
@@ -116,6 +119,9 @@ class ProcrustesService:
         Returns:
             Grayscale image as numpy array
         """
+        if not s3_key.startswith("artworks/"):
+            s3_key = "artworks/" + s3_key
+        logger.info(f"Loading image from S3: {self.s3_bucket}/{s3_key}")
         response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=s3_key)
         image_bytes = response["Body"].read()
 
@@ -169,6 +175,7 @@ class ProcrustesService:
             List of (ProcrustesResult, img_path, contour_points, hu_distance) sorted by disparity
         """
         procrustes_results = []
+        logger.info(f"Computing Procrustes for {len(faiss_results)} candidates")
 
         for hu_distance, img_path, contour_idx in faiss_results:
             try:
