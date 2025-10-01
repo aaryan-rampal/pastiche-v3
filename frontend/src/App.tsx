@@ -47,11 +47,6 @@ function App() {
       {/* Immersive Canvas */}
       <ImmersiveCanvas
         isDarkMode={isDarkMode}
-        onStrokeCountChange={handleStrokeCountChange}
-        onSearchTrigger={handleSearchTrigger}
-        onClear={handleClear}
-        maxStrokes={maxStrokes}
-        isSearching={isSearching}
       />
 
       {/* Floating Controls */}

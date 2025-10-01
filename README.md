@@ -318,7 +318,6 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 ### 🚀 Future Phases
 
 #### Phase 6: Production Deployment (Planned)
-
 - [ ] **CI/CD Pipeline**: Automated testing and deployment
 - [ ] **Monitoring**: Application performance and error tracking
 - [ ] **Scaling**: Load balancing and database optimization
@@ -341,13 +340,11 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 ### Backend Innovations
 
 1. **Hybrid Matching Algorithm**:
-
    - FAISS retrieves top 1000 candidates in ~100ms
    - Procrustes refines to top 10 matches
    - Exponential distribution for intelligent random selection (favors best matches)
 
 2. **Performance Optimization**:
-
    - Parallelized S3 fetching (10x speedup with ThreadPoolExecutor)
    - Smart image proxy to eliminate CORS issues
    - Singleton pattern for FAISS index (loaded once, reused across requests)
@@ -360,14 +357,12 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 ### Frontend Innovations
 
 1. **Advanced Canvas Drawing**:
-
    - Smooth quadratic curves using control points
    - Variable line width based on simulated pressure
    - FIFO queue prevents memory issues with long strokes
    - Shadow effects for visual depth
 
 2. **Intelligent Result Display**:
-
    - Aspect-ratio-aware image rendering
    - Dynamic contour overlay with coordinate transformation
    - Scale factor calculation: `scaleX = renderedWidth / naturalWidth`
