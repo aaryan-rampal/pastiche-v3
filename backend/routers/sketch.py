@@ -3,9 +3,11 @@
 from loguru import logger
 from core.config import settings
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import numpy as np
+import io
 
 from services.contour_service import extract_contours_from_image_bytes
 from services.faiss_service import FAISSService
@@ -133,7 +135,7 @@ async def match_sketch_points(
 
             match = MatchResult(
                 artwork_path=img_path,
-                artwork_url=f"https://{procrustes_service.s3_bucket}.s3.amazonaws.com/{img_path}",
+                artwork_url=f"/api/sketch/image/{img_path}",  # Use proxy endpoint instead of direct S3
                 procrustes_score=procrustes_result.disparity,
                 hu_distance=float(hu_distance),
                 transform=TransformParams(
@@ -173,6 +175,46 @@ async def match_sketch_points(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.get("/image/{path:path}")
+async def get_artwork_image(path: str):
+    """Proxy endpoint to serve artwork images from S3.
+
+    Args:
+        path: S3 key path (e.g., 'artworks/baroque/image.jpg')
+
+    Returns:
+        StreamingResponse with the image bytes
+    """
+    try:
+        # Ensure path starts with 'artworks/'
+        if not path.startswith("artworks/"):
+            path = "artworks/" + path
+
+        logger.info(f"Fetching image from S3: {path}")
+
+        # Get image from S3
+        response = procrustes_service.s3_client.get_object(
+            Bucket=procrustes_service.s3_bucket,
+            Key=path
+        )
+
+        # Get content type
+        content_type = response.get('ContentType', 'image/jpeg')
+
+        # Stream the image
+        return StreamingResponse(
+            io.BytesIO(response['Body'].read()),
+            media_type=content_type,
+            headers={
+                "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching image {path}: {str(e)}")
+        raise HTTPException(status_code=404, detail=f"Image not found: {path}")
 
 
 @router.get("/health")
