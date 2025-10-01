@@ -2,25 +2,31 @@ import numpy as np
 import cv2
 
 
-def compute_enhanced_features(contour_points: np.ndarray) -> np.ndarray:
-    """Compute enhanced feature vector: Hu moments + additional shape descriptors
-
-    This is the same implementation previously living in hu_faiss.py. It
-    returns a fixed-size vector (7 Hu moments + 8 additional shape features).
-    """
+def compute_hu_moments(contour_points: np.ndarray) -> np.ndarray:
+    """Compute Hu moments for a given contour."""
     try:
         contour_points = contour_points.astype(np.float32)
-
-        # 1. Hu moments (7 features)
         moments = cv2.moments(contour_points)
         if moments["m00"] == 0:
-            return np.zeros(15, dtype=np.float32)  # Increased feature size
+            return np.zeros(7, dtype=np.float32)
 
         hu_moments = cv2.HuMoments(moments).flatten()
         # Log scale transform for better numerical stability and preserve sign
         hu_moments = -np.sign(hu_moments) * np.log10(np.abs(hu_moments) + 1e-10)
+        return hu_moments
+    except Exception as e:
+        print(f"Error computing Hu moments: {e}")
+        return np.zeros(7, dtype=np.float32)
 
-        # 2. Additional shape features
+
+def compute_enhanced_features(contour_points: np.ndarray) -> np.ndarray:
+    """Compute enhanced feature vector: Hu moments + additional shape descriptors"""
+    try:
+        hu_moments = compute_hu_moments(contour_points)
+        if hu_moments is None or len(hu_moments) != 7 or np.sum(hu_moments) == 0:
+            return np.zeros(7, dtype=np.float32)
+
+        # Additional shape features
         area = cv2.contourArea(contour_points)
         perimeter = cv2.arcLength(contour_points, closed=True)
 
