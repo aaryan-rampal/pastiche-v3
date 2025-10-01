@@ -14,7 +14,7 @@ import multiprocessing as mp
 DATA_DIR: str = "/Volumes/Extreme SSD/wikiart/"
 lo: int = 150
 hi: int = 200
-TRUNCATE: int = 500  # Set to positive integer to limit number of images processed
+TRUNCATE: int = -1  # Set to positive integer to limit number of images processed
 
 # %%
 df = pd.read_csv("../../data/classes_truncated.csv")

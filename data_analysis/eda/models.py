@@ -137,6 +137,8 @@ class ContourFAISSIndex:
         self.contour_metadata: List[
             Tuple[str, int]
         ] = []  # mapping index row -> (img_path, contour_idx)
+        self.contour_metadata_s3: List[Tuple[str, int]] = []  # S3 path version
+
         self.hu_features: Optional[np.ndarray] = None
         self.use_weighted_distance: bool = use_weighted_distance
 
@@ -153,7 +155,8 @@ class ContourFAISSIndex:
         print("Computing enhanced features for all contours...")
 
         feature_vectors = []
-        metadata = []
+        local_metadata = []
+        s3_metadata = []
 
         for img_path, img_model in tqdm(image_models.items()):
             for contour_idx, contour in enumerate(img_model.contours):
@@ -164,14 +167,18 @@ class ContourFAISSIndex:
                     np.isinf(hu_moments)
                 ):
                     feature_vectors.append(hu_moments)
-                    metadata.append((img_path, contour_idx))
+                    local_metadata.append((img_path, contour_idx))
+
+                    s3_path = "/".join(img_path.split("/")[-2:])
+                    s3_metadata.append((s3_path, contour_idx))
 
         if not feature_vectors:
             raise ValueError("No valid features computed")
 
         # Convert to numpy array
         self.hu_features = np.array(feature_vectors, dtype=np.float32)
-        self.contour_metadata = metadata
+        self.contour_metadata = local_metadata
+        self.contour_metadata_s3 = s3_metadata
 
         # Optionally normalize features for better FAISS performance
         if self.use_weighted_distance:
@@ -247,6 +254,15 @@ class ContourFAISSIndex:
             )
         print(f"Saved index to {filepath}")
 
+        with open(f"{filepath}_metadata_s3.pkl", "wb") as f:
+            pickle.dump(
+                {
+                    "contour_metadata_s3": self.contour_metadata_s3,
+                },
+                f,
+            )
+        print(f"Saved S3 metadata to {filepath}_metadata_s3.pkl")
+
     def load_index(self, filepath: str) -> None:
         """Load the FAISS index and metadata from disk.
 
@@ -259,3 +275,8 @@ class ContourFAISSIndex:
             self.contour_metadata = data["contour_metadata"]
             self.hu_features = data["hu_features"]
         print(f"Loaded index from {filepath}")
+
+        with open(f"{filepath}_metadata_s3.pkl", "rb") as f:
+            data = pickle.load(f)
+            self.contour_metadata_s3 = data["contour_metadata_s3"]
+        print(f"Loaded S3 metadata from {filepath}_metadata_s3.pkl")
