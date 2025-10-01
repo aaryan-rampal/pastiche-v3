@@ -47,6 +47,9 @@ class MatchResult(BaseModel):
         ..., description="Transform parameters for alignment"
     )
     contour_idx: int = Field(..., description="Index of matched contour in artwork")
+    matched_contour_points: List[List[float]] = Field(
+        ..., description="Points of the matched contour from the artwork [[x, y], ...]"
+    )
 
 
 class MatchResponse(BaseModel):
@@ -147,6 +150,7 @@ async def match_sketch_points(
                     target_centroid=procrustes_result.target_centroid,
                 ),
                 contour_idx=contour_idx,
+                matched_contour_points=contour_points.tolist(),  # Convert numpy array to list
             )
             matches.append(match)
 
