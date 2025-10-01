@@ -1,5 +1,7 @@
 """Service for FAISS index operations."""
+
 from pathlib import Path
+from loguru import logger
 from typing import List, Tuple, Optional
 import numpy as np
 from models.schemas import ContourFAISSIndex
@@ -34,7 +36,7 @@ class FAISSService:
 
         self._index = ContourFAISSIndex(use_weighted_distance=True)
         self._index.load_index(index_path)
-        print(f"FAISS index loaded with {len(self._index.contour_metadata)} contours")
+        print(f"FAISS index loaded with {len(self._index.contour_metadata_s3)} contours")
 
     def search_similar_contours(
         self, sketch_contour: np.ndarray, k: int = 100
@@ -49,6 +51,7 @@ class FAISSService:
             List of (distance, image_path, contour_idx) tuples
         """
         if self._index is None:
+            logger.info("FAISS index not loaded, loading now...")
             raise RuntimeError("FAISS index not loaded")
 
         return self._index.search_similar_contours(sketch_contour, k)
@@ -57,4 +60,4 @@ class FAISSService:
         """Get contour metadata (image_path, contour_idx) for all indexed contours."""
         if self._index is None:
             raise RuntimeError("FAISS index not loaded")
-        return self._index.contour_metadata
+        return self._index.contour_metadata_s3
