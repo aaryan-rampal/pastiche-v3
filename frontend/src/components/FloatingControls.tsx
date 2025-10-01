@@ -3,10 +3,6 @@ import React from 'react'
 interface FloatingControlsProps {
   isDarkMode: boolean
   onToggleDarkMode: () => void
-  onClear: () => void
-  onUpload: () => void
-  strokeCount: number
-  maxStrokes: number
 }
 
 const FloatingControls: React.FC<FloatingControlsProps> = ({
