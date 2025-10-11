@@ -1,5 +1,8 @@
 """API router for sketch matching endpoints."""
 
+import matplotlib.pyplot as plt
+import os
+
 from loguru import logger
 from core.config import settings
 from fastapi import APIRouter, UploadFile, File, HTTPException
@@ -80,6 +83,45 @@ class MatchRequestBody(BaseModel):
     )
 
 
+async def quick_helper(sketch_contour: np.ndarray) -> None:
+    """Helper function to save sketch points as matplotlib image."""
+
+    # Create output directory if it doesn't exist
+    output_dir = "data_analysis/sketches"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Create timestamp for unique filename
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Plot the sketch points
+    if len(sketch_contour) > 0:
+        points = np.array(sketch_contour)
+        ax.plot(points[:, 0], points[:, 1], "b-", linewidth=2, markersize=4)
+        ax.scatter(points[:, 0], points[:, 1], c="red", s=20, zorder=5)
+
+        # Set equal aspect ratio and limits
+        ax.set_aspect("equal")
+        ax.set_xlim(points[:, 0].min() - 10, points[:, 0].max() + 10)
+        ax.set_ylim(points[:, 1].min() - 10, points[:, 1].max() + 10)
+
+        # Remove axes for cleaner look
+        ax.axis("off")
+
+        # Save the plot
+        output_path = os.path.join(output_dir, f"sketch_{timestamp}.png")
+        plt.savefig(output_path, dpi=150, bbox_inches="tight", transparent=True)
+        plt.close()
+
+        logger.info(f"Saved sketch visualization to {output_path}")
+    else:
+        logger.warning("No points to visualize")
+
+
 @router.post("/match-points", response_model=MatchResponse)
 async def match_sketch_points(
     request: MatchRequestBody,
@@ -103,6 +145,13 @@ async def match_sketch_points(
                 detail="At least 3 points are required for matching.",
             )
         logger.debug(f"Sketch contour has {len(sketch_contour)} points")
+
+        # reverse y-axis to match image coordinate system
+        sketch_contour[:, 1] = -sketch_contour[:, 1]
+
+        if settings.save_sketch_debug:
+            await quick_helper(sketch_contour)
+            logger.info("Saved sketch points visualization for debugging")
 
         # Stage 1: FAISS search for initial candidates
         faiss_results = faiss_service.search_similar_contours(

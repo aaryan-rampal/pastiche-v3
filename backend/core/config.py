@@ -34,5 +34,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
 
+    save_sketch_debug: bool = True
+
 
 settings = Settings()
