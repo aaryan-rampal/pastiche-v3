@@ -206,12 +206,14 @@ async def match_sketch_points(
         # Use exponential distribution to select one match
         # Earlier results (better Procrustes scores) are weighted more heavily
         if len(matches) > 0:
+            logger.debug(matches)
             # Generate exponential weights (decay rate = 1.0)
             weights = np.exp(-np.arange(len(matches)))
             # Normalize to probabilities
             probabilities = weights / weights.sum()
             # Randomly select one index based on probabilities
             selected_idx = np.random.choice(len(matches), p=probabilities)
+            logger.debug(selected_idx)
             selected_match = matches[selected_idx]
             matches = [selected_match]
             logger.info(

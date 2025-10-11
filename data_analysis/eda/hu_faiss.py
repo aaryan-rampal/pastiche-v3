@@ -210,14 +210,15 @@ faiss_index.save_index("contour_hu_index")
 
 # %%
 # Load sketch and extract contours
-sketch_path = "../sketches/edge.png"
+# sketch_path = "../sketches/edge.png"
+sketch_path = "../../backend/data_analysis/sketches/sketch_20251011_153435.png"
 sketch_img = cv2.imread(sketch_path, cv2.IMREAD_GRAYSCALE)
 if sketch_img is None:
     raise ValueError("Failed to load sketch image")
 
 # rotate sketch by 30 degrees for testing
 # (uncomment to test rotation invariance)
-sketch_img = cv2.rotate(sketch_img, cv2.ROTATE_90_CLOCKWISE)
+# sketch_img = cv2.rotate(sketch_img, cv2.ROTATE_90_CLOCKWISE)
 
 plt.figure(figsize=(8, 8))
 plt.imshow(sketch_img, cmap="gray")
