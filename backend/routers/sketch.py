@@ -214,7 +214,9 @@ async def match_sketch_points(
             selected_idx = np.random.choice(len(matches), p=probabilities)
             selected_match = matches[selected_idx]
             matches = [selected_match]
-            logger.info(f"Selected match {selected_idx} from {len(procrustes_results)} candidates using exponential distribution")
+            logger.info(
+                f"Selected match {selected_idx} from {len(procrustes_results)} candidates using exponential distribution"
+            )
 
         logger.info(f"Returning {len(matches)} match(es)")
 
@@ -249,20 +251,19 @@ async def get_artwork_image(path: str):
 
         # Get image from S3
         response = procrustes_service.s3_client.get_object(
-            Bucket=procrustes_service.s3_bucket,
-            Key=path
+            Bucket=procrustes_service.s3_bucket, Key=path
         )
 
         # Get content type
-        content_type = response.get('ContentType', 'image/jpeg')
+        content_type = response.get("ContentType", "image/jpeg")
 
         # Stream the image
         return StreamingResponse(
-            io.BytesIO(response['Body'].read()),
+            io.BytesIO(response["Body"].read()),
             media_type=content_type,
             headers={
                 "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
-            }
+            },
         )
 
     except Exception as e:
