@@ -91,7 +91,7 @@ async def save_sketch_points(sketch_contour: np.ndarray) -> None:
     """Helper function to save sketch points as matplotlib image."""
 
     # Create output directory if it doesn't exist
-    output_dir = "data_analysis/sketches"
+    output_dir = settings.sketch_debug_dir
     os.makedirs(output_dir, exist_ok=True)
 
     # Create timestamp for unique filename
@@ -137,7 +137,7 @@ async def visualize_faiss_matches(
     top_k: int = 5,
 ) -> str:
     """Visualize top K FAISS matches with contours overlaid on artworks."""
-    output_dir = "backend/debug_output"
+    output_dir = settings.pipeline_log_dir
     os.makedirs(output_dir, exist_ok=True)
 
     n_results = min(top_k, len(faiss_results))
@@ -193,7 +193,7 @@ async def visualize_procrustes_matches(
     top_k: int = 5,
 ) -> str:
     """Visualize top K Procrustes matches with transformed sketch overlay."""
-    output_dir = "backend/debug_output"
+    output_dir = settings.pipeline_log_dir
     os.makedirs(output_dir, exist_ok=True)
 
     n_results = min(top_k, len(procrustes_results))
@@ -267,7 +267,7 @@ async def visualize_final_match(
     timestamp: str,
 ) -> str:
     """Create detailed visualization of the final selected match."""
-    output_dir = "backend/debug_output"
+    output_dir = settings.pipeline_log_dir
     os.makedirs(output_dir, exist_ok=True)
 
     try:

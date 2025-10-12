@@ -35,6 +35,8 @@ class Settings(BaseSettings):
         case_sensitive = False
 
     save_sketch_debug: bool = True
+    sketch_debug_dir: str = "logs/sketch_debug"
+    pipeline_log_dir: str = "logs/pipeline"
 
 
 settings = Settings()
