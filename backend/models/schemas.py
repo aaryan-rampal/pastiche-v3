@@ -248,8 +248,12 @@ class ContourFAISSIndex:
 
         # Apply same normalization as training data
         if self.use_weighted_distance:
-            logger.debug(f"Applying normalization with mean={self.feature_mean}, std={self.feature_std}")
-            sketch_moments_normalized = (sketch_moments - self.feature_mean) / self.feature_std
+            logger.debug(
+                f"Applying normalization with mean={self.feature_mean}, std={self.feature_std}"
+            )
+            sketch_moments_normalized = (
+                sketch_moments - self.feature_mean
+            ) / self.feature_std
             logger.debug(f"Normalized Hu moments: {sketch_moments_normalized}")
             sketch_moments = sketch_moments_normalized
 
@@ -258,7 +262,9 @@ class ContourFAISSIndex:
         distances, indices = self.index.search(
             sketch_moments.reshape(1, -1), k
         )  # Return metadata for found contours
-        logger.debug(f"FAISS raw results: distances={distances[0][:5]}, indices={indices[0][:5]}")
+        logger.debug(
+            f"FAISS raw results: distances={distances[0][:5]}, indices={indices[0][:5]}"
+        )
         results = []
         for i, idx in enumerate(indices[0]):
             if idx < len(self.contour_metadata_s3):

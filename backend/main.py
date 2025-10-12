@@ -1,4 +1,5 @@
 """FastAPI application entry point for Pastiche backend."""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings

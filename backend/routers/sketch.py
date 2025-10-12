@@ -9,7 +9,7 @@ import cv2
 
 from loguru import logger
 from core.config import settings
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Tuple
@@ -17,7 +17,6 @@ import numpy as np
 import io
 from datetime import datetime
 
-from services.contour_service import extract_contours_from_image_bytes
 from services.faiss_service import FAISSService
 from services.procrustes_service import ProcrustesService
 from models.schemas import PointInput, ProcrustesResult
@@ -323,12 +322,12 @@ async def visualize_final_match(
         details_text += f"Hu Distance: {match.hu_distance:.6f}\n\n"
         details_text += f"Scale Factor: {match.transform.scale:.3f}\n"
         details_text += f"Rotation: {match.transform.rotation_degrees:.2f}° ({match.transform.rotation_radians:.4f} rad)\n\n"
-        details_text += f"Translation:\n"
+        details_text += "Translation:\n"
         details_text += f"  dx: {match.transform.translation['x']:.2f}\n"
         details_text += f"  dy: {match.transform.translation['y']:.2f}\n\n"
         details_text += f"Sketch Centroid: ({match.transform.sketch_centroid['x']:.1f}, {match.transform.sketch_centroid['y']:.1f})\n"
         details_text += f"Target Centroid: ({match.transform.target_centroid['x']:.1f}, {match.transform.target_centroid['y']:.1f})\n\n"
-        details_text += f"Contours:\n"
+        details_text += "Contours:\n"
         details_text += f"  Sketch points: {len(sketch_contour)}\n"
         details_text += f"  Target points: {len(contour_points)}\n\n"
         details_text += f"Artwork: {match.artwork_path}"
@@ -526,7 +525,7 @@ async def match_sketch_points(
             logger.info(
                 f"Selected match index: {selected_idx} from {len(procrustes_results)} candidates"
             )
-            logger.info(f"Selected match details:")
+            logger.info("Selected match details:")
             logger.info(f"  Path: {selected_match.artwork_path}")
             logger.info(
                 f"  Procrustes disparity: {selected_match.procrustes_score:.6f}"
