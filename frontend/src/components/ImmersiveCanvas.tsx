@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
+import MatchedArtwork from './MatchedArtwork'
 
 interface StrokePoint {
   x: number
@@ -24,6 +25,9 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
   const [isDrawing, setIsDrawing] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
   const [currentMessage, setCurrentMessage] = useState('')
+  const [matchedImage, setMatchedImage] = useState<string | null>(null)
+  const [matchedContour, setMatchedContour] = useState<number[][] | null>(null)
+  const [imageError, setImageError] = useState<string | null>(null)
 
   const maxPoints = 75 // Maximum points in a single continuous stroke
   const strokeIdRef = useRef(0)
@@ -159,6 +163,9 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
 
     // Clear existing stroke when starting new drawing session
     setStrokePath(null)
+    setMatchedImage(null)
+    setMatchedContour(null)
+    setImageError(null)
 
     // Start new path
     setCurrentPath([{ x, y, pressure: 0.8 }])
@@ -202,7 +209,7 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
   }, [isDrawing])
 
   // Stop drawing and trigger animation
-  const stopDrawing = useCallback(() => {
+  const stopDrawing = useCallback(async () => {
     if (!isDrawing) return
     console.log('Completed stroke with points:', currentPath.length)
     console.log('Final stroke path:', currentPath)
@@ -231,14 +238,60 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
       setIsAnimating(true)
       setCurrentMessage(messages[Math.floor(Math.random() * messages.length)])
 
-      // Stop animation after 4 seconds
-      setTimeout(() => {
-        setIsAnimating(false)
-        setCurrentMessage('')
-      }, 4000)
+      try {
+        // Send points to backend using the new match-points endpoint
+        // Backend will return 1 match selected from top 10 using exponential distribution
+        const response = await fetch('http://localhost:8000/api/sketch/match-points', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            points: {
+              points: currentPath.map(p => [p.x, p.y])
+            },
+            top_k_faiss: 1000,
+            top_k_final: 10
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to match sketch')
+        }
+
+        const data = await response.json()
+        console.log('API Response:', data)
+
+        // Get the first match result
+        if (data.matches && data.matches.length > 0) {
+          // Backend now returns proxy URL like '/api/sketch/image/artworks/...'
+          // Prepend backend URL
+          const artworkUrl = `http://localhost:8000${data.matches[0].artwork_url}`
+          console.log('Setting matched image URL:', artworkUrl)
+          console.log('Full match data:', data.matches[0])
+          console.log('Matched contour points:', data.matches[0].matched_contour_points)
+          setMatchedImage(artworkUrl)
+          setMatchedContour(data.matches[0].matched_contour_points)
+          setImageError(null)
+        } else {
+          console.warn('No matches returned from API')
+          setImageError('No matches found')
+        }
+      } catch (error) {
+        console.error('Error matching sketch:', error)
+        setImageError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      } finally {
+        // Stop animation after 4 seconds
+        setTimeout(() => {
+          setIsAnimating(false)
+          setCurrentMessage('')
+        }, 4000)
+      }
     }
 
-  }, [isDrawing, currentPath, completeCurrentStroke])  // Generate random ripple points
+  }, [isDrawing, currentPath, completeCurrentStroke])
+
+  // Generate random ripple points
   const generateRandomRipplePoints = (count: number = 15) => {
     const canvas = canvasRef.current
     if (!canvas) return []
@@ -372,6 +425,26 @@ const ImmersiveCanvas: React.FC<ImmersiveCanvasProps> = ({ isDarkMode }) => {
             <div className="search-message">
               {currentMessage}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Matched artwork image with contour overlay */}
+      {matchedImage && matchedContour && !isAnimating && (
+        <MatchedArtwork
+          imageUrl={matchedImage}
+          contourPoints={matchedContour}
+          isDarkMode={isDarkMode}
+          onError={(error) => setImageError(error)}
+        />
+      )}
+
+      {/* Error message */}
+      {imageError && !isAnimating && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+          <div className="bg-red-500 bg-opacity-80 text-white p-4 rounded-lg max-w-md">
+            <p className="font-semibold">Image Load Error</p>
+            <p className="text-sm mt-2">{imageError}</p>
           </div>
         </div>
       )}
