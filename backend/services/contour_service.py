@@ -1,4 +1,5 @@
 """Service for extracting contours from images."""
+
 import cv2
 import numpy as np
 from typing import List

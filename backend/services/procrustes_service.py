@@ -180,16 +180,26 @@ class ProcrustesService:
         Raises:
             Exception: If processing fails
         """
-        logger.debug(f"Processing candidate: {img_path}[{contour_idx}], hu_distance={hu_distance:.6f}")
+        logger.debug(
+            f"Processing candidate: {img_path}[{contour_idx}], hu_distance={hu_distance:.6f}"
+        )
 
         # Extract contour from S3 image
-        contour_points, image_shape = self.extract_contour_from_s3_image(img_path, contour_idx)
-        logger.debug(f"  Extracted contour: {len(contour_points)} points, image_shape={image_shape}")
-        logger.debug(f"  Contour range: x[{contour_points[:, 0].min():.1f}, {contour_points[:, 0].max():.1f}], y[{contour_points[:, 1].min():.1f}, {contour_points[:, 1].max():.1f}]")
+        contour_points, image_shape = self.extract_contour_from_s3_image(
+            img_path, contour_idx
+        )
+        logger.debug(
+            f"  Extracted contour: {len(contour_points)} points, image_shape={image_shape}"
+        )
+        logger.debug(
+            f"  Contour range: x[{contour_points[:, 0].min():.1f}, {contour_points[:, 0].max():.1f}], y[{contour_points[:, 1].min():.1f}, {contour_points[:, 1].max():.1f}]"
+        )
 
         # Compute Procrustes alignment
         result = align_contours_with_transform(sketch_contour, contour_points)
-        logger.debug(f"  Procrustes disparity: {result.disparity:.6f}, scale: {result.scale:.3f}, rotation: {result.rotation_degrees:.1f}°")
+        logger.debug(
+            f"  Procrustes disparity: {result.disparity:.6f}, scale: {result.scale:.3f}, rotation: {result.rotation_degrees:.1f}°"
+        )
 
         return (result, img_path, contour_points, hu_distance)
 
@@ -212,7 +222,9 @@ class ProcrustesService:
             List of (ProcrustesResult, img_path, contour_points, hu_distance) sorted by disparity
         """
         procrustes_results = []
-        logger.info(f"Computing Procrustes for {len(faiss_results)} candidates (parallel with {max_workers} workers)")
+        logger.info(
+            f"Computing Procrustes for {len(faiss_results)} candidates (parallel with {max_workers} workers)"
+        )
 
         # Process candidates in parallel using ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -223,7 +235,7 @@ class ProcrustesService:
                     sketch_contour,
                     hu_distance,
                     img_path,
-                    contour_idx
+                    contour_idx,
                 ): (hu_distance, img_path, contour_idx)
                 for hu_distance, img_path, contour_idx in faiss_results
             }
@@ -246,6 +258,8 @@ class ProcrustesService:
 
         logger.debug("Sorted Procrustes results (all):")
         for i, (result, path, _, hu_dist) in enumerate(procrustes_results[:10]):
-            logger.debug(f"  {i+1}. disparity={result.disparity:.6f}, hu_dist={hu_dist:.6f}, path={path}")
+            logger.debug(
+                f"  {i + 1}. disparity={result.disparity:.6f}, hu_dist={hu_dist:.6f}, path={path}"
+            )
 
         return procrustes_results[:top_k]

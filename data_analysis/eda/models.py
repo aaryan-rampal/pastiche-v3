@@ -4,7 +4,7 @@ import pickle
 from tqdm import tqdm
 import numpy as np
 import cv2
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict
 from utils import compute_hu_moments
 
 
