@@ -2,7 +2,8 @@
 
 import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
+
+matplotlib.use("Agg")  # Use non-interactive backend
 import os
 import cv2
 
@@ -134,7 +135,7 @@ async def visualize_faiss_matches(
     sketch_contour: np.ndarray,
     faiss_results: List[Tuple[float, str, int]],
     timestamp: str,
-    top_k: int = 5
+    top_k: int = 5,
 ) -> str:
     """Visualize top K FAISS matches with contours overlaid on artworks."""
     output_dir = "backend/debug_output"
@@ -146,10 +147,10 @@ async def visualize_faiss_matches(
         axes = [axes]
 
     # Plot sketch
-    axes[0].plot(sketch_contour[:, 0], sketch_contour[:, 1], 'b-', linewidth=2)
-    axes[0].set_title("Sketch", fontsize=10, fontweight='bold')
-    axes[0].axis('equal')
-    axes[0].axis('off')
+    axes[0].plot(sketch_contour[:, 0], sketch_contour[:, 1], "b-", linewidth=2)
+    axes[0].set_title("Sketch", fontsize=10, fontweight="bold")
+    axes[0].axis("equal")
+    axes[0].axis("off")
 
     # Plot top FAISS matches
     for i, (distance, img_path, contour_idx) in enumerate(faiss_results[:n_results]):
@@ -159,23 +160,27 @@ async def visualize_faiss_matches(
             image_rgb = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
 
             # Extract and draw contour
-            contour_points, _ = procrustes_service.extract_contour_from_s3_image(img_path, contour_idx)
+            contour_points, _ = procrustes_service.extract_contour_from_s3_image(
+                img_path, contour_idx
+            )
             contour_points_int = contour_points.astype(np.int32)
 
             # Draw contour on image
             cv2.polylines(image_rgb, [contour_points_int], False, (255, 0, 0), 2)
 
             axes[i + 1].imshow(image_rgb)
-            axes[i + 1].set_title(f"#{i+1}\nDist: {distance:.4f}", fontsize=9)
-            axes[i + 1].axis('off')
+            axes[i + 1].set_title(f"#{i + 1}\nDist: {distance:.4f}", fontsize=9)
+            axes[i + 1].axis("off")
         except Exception as e:
             logger.error(f"Error visualizing FAISS match {i}: {e}")
-            axes[i + 1].text(0.5, 0.5, f"Error loading\n{img_path}", ha='center', va='center')
-            axes[i + 1].axis('off')
+            axes[i + 1].text(
+                0.5, 0.5, f"Error loading\n{img_path}", ha="center", va="center"
+            )
+            axes[i + 1].axis("off")
 
     plt.tight_layout()
     output_path = os.path.join(output_dir, f"faiss_matches_{timestamp}.png")
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
 
     logger.info(f"Saved FAISS matches visualization to {output_path}")
@@ -186,7 +191,7 @@ async def visualize_procrustes_matches(
     sketch_contour: np.ndarray,
     procrustes_results: List[Tuple[ProcrustesResult, str, np.ndarray, float]],
     timestamp: str,
-    top_k: int = 5
+    top_k: int = 5,
 ) -> str:
     """Visualize top K Procrustes matches with transformed sketch overlay."""
     output_dir = "backend/debug_output"
@@ -197,7 +202,9 @@ async def visualize_procrustes_matches(
     if n_results == 1:
         axes = axes.reshape(2, 1)
 
-    for i, (procrustes_result, img_path, contour_points, hu_distance) in enumerate(procrustes_results[:n_results]):
+    for i, (procrustes_result, img_path, contour_points, hu_distance) in enumerate(
+        procrustes_results[:n_results]
+    ):
         try:
             # Load image from S3
             image = procrustes_service.load_image_from_s3(img_path)
@@ -209,34 +216,44 @@ async def visualize_procrustes_matches(
             cv2.polylines(image_with_contour, [target_pts], False, (255, 0, 0), 2)
 
             axes[0, i].imshow(image_with_contour)
-            axes[0, i].set_title(f"#{i+1} Target Contour", fontsize=9, fontweight='bold')
-            axes[0, i].axis('off')
+            axes[0, i].set_title(
+                f"#{i + 1} Target Contour", fontsize=9, fontweight="bold"
+            )
+            axes[0, i].axis("off")
 
             # Bottom row: Image with overlay of transformed sketch
             image_with_overlay = image_rgb.copy()
             # Draw target contour in red
             cv2.polylines(image_with_overlay, [target_pts], False, (255, 0, 0), 2)
             # Draw transformed sketch in blue (dashed approximation with circles)
-            transformed_pts = procrustes_result.transformed_sketch_points.astype(np.int32)
+            transformed_pts = procrustes_result.transformed_sketch_points.astype(
+                np.int32
+            )
             for j in range(len(transformed_pts) - 1):
-                cv2.line(image_with_overlay, tuple(transformed_pts[j]), tuple(transformed_pts[j+1]), (0, 0, 255), 2)
+                cv2.line(
+                    image_with_overlay,
+                    tuple(transformed_pts[j]),
+                    tuple(transformed_pts[j + 1]),
+                    (0, 0, 255),
+                    2,
+                )
 
             axes[1, i].imshow(image_with_overlay)
             title = f"Disparity: {procrustes_result.disparity:.4f}\n"
             title += f"Scale: {procrustes_result.scale:.2f}, Rot: {procrustes_result.rotation_degrees:.1f}°"
             axes[1, i].set_title(title, fontsize=8)
-            axes[1, i].axis('off')
+            axes[1, i].axis("off")
 
         except Exception as e:
             logger.error(f"Error visualizing Procrustes match {i}: {e}")
-            axes[0, i].text(0.5, 0.5, "Error", ha='center', va='center')
-            axes[1, i].text(0.5, 0.5, "Error", ha='center', va='center')
-            axes[0, i].axis('off')
-            axes[1, i].axis('off')
+            axes[0, i].text(0.5, 0.5, "Error", ha="center", va="center")
+            axes[1, i].text(0.5, 0.5, "Error", ha="center", va="center")
+            axes[0, i].axis("off")
+            axes[1, i].axis("off")
 
     plt.tight_layout()
     output_path = os.path.join(output_dir, f"procrustes_matches_{timestamp}.png")
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
 
     logger.info(f"Saved Procrustes matches visualization to {output_path}")
@@ -248,7 +265,7 @@ async def visualize_final_match(
     match: MatchResult,
     procrustes_result: ProcrustesResult,
     contour_points: np.ndarray,
-    timestamp: str
+    timestamp: str,
 ) -> str:
     """Create detailed visualization of the final selected match."""
     output_dir = "backend/debug_output"
@@ -262,18 +279,20 @@ async def visualize_final_match(
         fig, axes = plt.subplots(2, 2, figsize=(12, 12))
 
         # 1. Original sketch
-        axes[0, 0].plot(sketch_contour[:, 0], sketch_contour[:, 1], 'b-', linewidth=2)
-        axes[0, 0].set_title("Original Sketch", fontsize=12, fontweight='bold')
-        axes[0, 0].axis('equal')
-        axes[0, 0].axis('off')
+        axes[0, 0].plot(sketch_contour[:, 0], sketch_contour[:, 1], "b-", linewidth=2)
+        axes[0, 0].set_title("Original Sketch", fontsize=12, fontweight="bold")
+        axes[0, 0].axis("equal")
+        axes[0, 0].axis("off")
 
         # 2. Artwork with target contour
         target_pts = contour_points.astype(np.int32)
         image_target = image_rgb.copy()
         cv2.polylines(image_target, [target_pts], False, (255, 0, 0), 3)
         axes[0, 1].imshow(image_target)
-        axes[0, 1].set_title("Matched Artwork + Target Contour (RED)", fontsize=12, fontweight='bold')
-        axes[0, 1].axis('off')
+        axes[0, 1].set_title(
+            "Matched Artwork + Target Contour (RED)", fontsize=12, fontweight="bold"
+        )
+        axes[0, 1].axis("off")
 
         # 3. Overlay comparison
         image_overlay = image_rgb.copy()
@@ -282,14 +301,24 @@ async def visualize_final_match(
         # Transformed sketch in blue
         transformed_pts = procrustes_result.transformed_sketch_points.astype(np.int32)
         for j in range(len(transformed_pts) - 1):
-            cv2.line(image_overlay, tuple(transformed_pts[j]), tuple(transformed_pts[j+1]), (0, 0, 255), 2)
+            cv2.line(
+                image_overlay,
+                tuple(transformed_pts[j]),
+                tuple(transformed_pts[j + 1]),
+                (0, 0, 255),
+                2,
+            )
         axes[1, 0].imshow(image_overlay)
-        axes[1, 0].set_title("Overlay: Target (RED) + Transformed Sketch (BLUE)", fontsize=12, fontweight='bold')
-        axes[1, 0].axis('off')
+        axes[1, 0].set_title(
+            "Overlay: Target (RED) + Transformed Sketch (BLUE)",
+            fontsize=12,
+            fontweight="bold",
+        )
+        axes[1, 0].axis("off")
 
         # 4. Transformation details
-        axes[1, 1].axis('off')
-        details_text = "TRANSFORMATION DETAILS\n" + "="*40 + "\n\n"
+        axes[1, 1].axis("off")
+        details_text = "TRANSFORMATION DETAILS\n" + "=" * 40 + "\n\n"
         details_text += f"Procrustes Disparity: {match.procrustes_score:.6f}\n"
         details_text += f"Hu Distance: {match.hu_distance:.6f}\n\n"
         details_text += f"Scale Factor: {match.transform.scale:.3f}\n"
@@ -304,11 +333,13 @@ async def visualize_final_match(
         details_text += f"  Target points: {len(contour_points)}\n\n"
         details_text += f"Artwork: {match.artwork_path}"
 
-        axes[1, 1].text(0.1, 0.5, details_text, fontsize=10, family='monospace', va='center')
+        axes[1, 1].text(
+            0.1, 0.5, details_text, fontsize=10, family="monospace", va="center"
+        )
 
         plt.tight_layout()
         output_path = os.path.join(output_dir, f"final_match_{timestamp}.png")
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        plt.savefig(output_path, dpi=150, bbox_inches="tight")
         plt.close()
 
         logger.info(f"Saved final match visualization to {output_path}")
@@ -339,7 +370,9 @@ async def match_sketch_points(
         logger.info("=" * 80)
         logger.info(f"NEW SKETCH MATCHING REQUEST - Session: {timestamp}")
         logger.info("=" * 80)
-        logger.info(f"Request parameters: top_k_faiss={request.top_k_faiss}, top_k_final={request.top_k_final}")
+        logger.info(
+            f"Request parameters: top_k_faiss={request.top_k_faiss}, top_k_final={request.top_k_final}"
+        )
 
         sketch_contour = request.points.to_numpy()
 
@@ -350,15 +383,25 @@ async def match_sketch_points(
             )
 
         logger.info(f"Sketch contour: {len(sketch_contour)} points")
-        logger.info(f"Sketch X range: [{sketch_contour[:, 0].min():.2f}, {sketch_contour[:, 0].max():.2f}]")
-        logger.info(f"Sketch Y range (before flip): [{sketch_contour[:, 1].min():.2f}, {sketch_contour[:, 1].max():.2f}]")
-        logger.debug(f"First 5 sketch points (before flip): {sketch_contour[:5].tolist()}")
+        logger.info(
+            f"Sketch X range: [{sketch_contour[:, 0].min():.2f}, {sketch_contour[:, 0].max():.2f}]"
+        )
+        logger.info(
+            f"Sketch Y range (before flip): [{sketch_contour[:, 1].min():.2f}, {sketch_contour[:, 1].max():.2f}]"
+        )
+        logger.debug(
+            f"First 5 sketch points (before flip): {sketch_contour[:5].tolist()}"
+        )
 
         # reverse y-axis to match image coordinate system
         sketch_contour[:, 1] = -sketch_contour[:, 1]
 
-        logger.info(f"Sketch Y range (after flip): [{sketch_contour[:, 1].min():.2f}, {sketch_contour[:, 1].max():.2f}]")
-        logger.debug(f"First 5 sketch points (after flip): {sketch_contour[:5].tolist()}")
+        logger.info(
+            f"Sketch Y range (after flip): [{sketch_contour[:, 1].min():.2f}, {sketch_contour[:, 1].max():.2f}]"
+        )
+        logger.debug(
+            f"First 5 sketch points (after flip): {sketch_contour[:5].tolist()}"
+        )
 
         if settings.save_sketch_debug:
             await save_sketch_points(sketch_contour)
@@ -377,7 +420,9 @@ async def match_sketch_points(
         # Log top 5 FAISS results
         logger.info("Top 5 FAISS matches:")
         for i, (distance, img_path, contour_idx) in enumerate(faiss_results[:5]):
-            logger.info(f"  {i+1}. distance={distance:.6f}, path={img_path}, contour_idx={contour_idx}")
+            logger.info(
+                f"  {i + 1}. distance={distance:.6f}, path={img_path}, contour_idx={contour_idx}"
+            )
 
         if not faiss_results:
             raise HTTPException(
@@ -387,7 +432,9 @@ async def match_sketch_points(
 
         # Visualize FAISS matches
         if settings.save_sketch_debug:
-            await visualize_faiss_matches(sketch_contour, faiss_results, timestamp, top_k=5)
+            await visualize_faiss_matches(
+                sketch_contour, faiss_results, timestamp, top_k=5
+            )
 
         # Stage 2: Procrustes refinement
         logger.info("-" * 80)
@@ -398,17 +445,31 @@ async def match_sketch_points(
         )
 
         # Log top 5 Procrustes results
-        logger.info(f"Procrustes refinement completed: {len(procrustes_results)} results")
+        logger.info(
+            f"Procrustes refinement completed: {len(procrustes_results)} results"
+        )
         logger.info("Top 5 Procrustes matches:")
-        for i, (procrustes_result, img_path, contour_points, hu_distance) in enumerate(procrustes_results[:5]):
-            logger.info(f"  {i+1}. disparity={procrustes_result.disparity:.6f}, hu_dist={hu_distance:.6f}, path={img_path}")
-            logger.info(f"      scale={procrustes_result.scale:.3f}, rotation={procrustes_result.rotation_degrees:.1f}°")
-            logger.info(f"      translation=({procrustes_result.translation['x']:.1f}, {procrustes_result.translation['y']:.1f})")
-            logger.info(f"      contour_points={len(contour_points)}, range: x[{contour_points[:, 0].min():.1f}, {contour_points[:, 0].max():.1f}], y[{contour_points[:, 1].min():.1f}, {contour_points[:, 1].max():.1f}]")
+        for i, (procrustes_result, img_path, contour_points, hu_distance) in enumerate(
+            procrustes_results[:5]
+        ):
+            logger.info(
+                f"  {i + 1}. disparity={procrustes_result.disparity:.6f}, hu_dist={hu_distance:.6f}, path={img_path}"
+            )
+            logger.info(
+                f"      scale={procrustes_result.scale:.3f}, rotation={procrustes_result.rotation_degrees:.1f}°"
+            )
+            logger.info(
+                f"      translation=({procrustes_result.translation['x']:.1f}, {procrustes_result.translation['y']:.1f})"
+            )
+            logger.info(
+                f"      contour_points={len(contour_points)}, range: x[{contour_points[:, 0].min():.1f}, {contour_points[:, 0].max():.1f}], y[{contour_points[:, 1].min():.1f}, {contour_points[:, 1].max():.1f}]"
+            )
 
         # Visualize Procrustes matches
         if settings.save_sketch_debug:
-            await visualize_procrustes_matches(sketch_contour, procrustes_results, timestamp, top_k=5)
+            await visualize_procrustes_matches(
+                sketch_contour, procrustes_results, timestamp, top_k=5
+            )
 
         # Build all candidate matches
         matches = []
@@ -451,33 +512,47 @@ async def match_sketch_points(
             weights = np.exp(-np.arange(len(matches)))
             # Normalize to probabilities
             probabilities = weights / weights.sum()
-            logger.info(f"Exponential weights: {weights[:5].tolist() if len(weights) > 5 else weights.tolist()}")
-            logger.info(f"Probabilities: {probabilities[:5].tolist() if len(probabilities) > 5 else probabilities.tolist()}")
+            logger.info(
+                f"Exponential weights: {weights[:5].tolist() if len(weights) > 5 else weights.tolist()}"
+            )
+            logger.info(
+                f"Probabilities: {probabilities[:5].tolist() if len(probabilities) > 5 else probabilities.tolist()}"
+            )
 
             # Randomly select one index based on probabilities
             selected_idx = np.random.choice(len(matches), p=probabilities)
             selected_match = matches[selected_idx]
 
-            logger.info(f"Selected match index: {selected_idx} from {len(procrustes_results)} candidates")
+            logger.info(
+                f"Selected match index: {selected_idx} from {len(procrustes_results)} candidates"
+            )
             logger.info(f"Selected match details:")
             logger.info(f"  Path: {selected_match.artwork_path}")
-            logger.info(f"  Procrustes disparity: {selected_match.procrustes_score:.6f}")
+            logger.info(
+                f"  Procrustes disparity: {selected_match.procrustes_score:.6f}"
+            )
             logger.info(f"  Hu distance: {selected_match.hu_distance:.6f}")
-            logger.info(f"  Transform: scale={selected_match.transform.scale:.3f}, rotation={selected_match.transform.rotation_degrees:.1f}°")
-            logger.info(f"  Matched contour: {len(selected_match.matched_contour_points)} points")
+            logger.info(
+                f"  Transform: scale={selected_match.transform.scale:.3f}, rotation={selected_match.transform.rotation_degrees:.1f}°"
+            )
+            logger.info(
+                f"  Matched contour: {len(selected_match.matched_contour_points)} points"
+            )
 
             matches = [selected_match]
 
             # Visualize final selected match
             if settings.save_sketch_debug:
                 # Get the full procrustes result and contour points for the selected match
-                selected_procrustes_result, _, selected_contour_points, _ = procrustes_results[selected_idx]
+                selected_procrustes_result, _, selected_contour_points, _ = (
+                    procrustes_results[selected_idx]
+                )
                 await visualize_final_match(
                     sketch_contour,
                     selected_match,
                     selected_procrustes_result,
                     selected_contour_points,
-                    timestamp
+                    timestamp,
                 )
 
         logger.info("=" * 80)
