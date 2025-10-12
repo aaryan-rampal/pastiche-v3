@@ -87,7 +87,7 @@ class MatchRequestBody(BaseModel):
     )
 
 
-async def quick_helper(sketch_contour: np.ndarray) -> None:
+async def save_sketch_points(sketch_contour: np.ndarray) -> None:
     """Helper function to save sketch points as matplotlib image."""
 
     # Create output directory if it doesn't exist
@@ -120,6 +120,10 @@ async def quick_helper(sketch_contour: np.ndarray) -> None:
         output_path = os.path.join(output_dir, f"sketch_{timestamp}.png")
         plt.savefig(output_path, dpi=150, bbox_inches="tight", transparent=True)
         plt.close()
+
+        # Also save points as .npy for potential future use
+        output_path_npy = os.path.join(output_dir, f"sketch_{timestamp}.npy")
+        np.save(output_path_npy, points)
 
         logger.info(f"Saved sketch visualization to {output_path}")
     else:
@@ -357,7 +361,7 @@ async def match_sketch_points(
         logger.debug(f"First 5 sketch points (after flip): {sketch_contour[:5].tolist()}")
 
         if settings.save_sketch_debug:
-            await quick_helper(sketch_contour)
+            await save_sketch_points(sketch_contour)
             logger.info("Saved sketch points visualization for debugging")
 
         # Stage 1: FAISS search for initial candidates
