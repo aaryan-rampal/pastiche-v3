@@ -9,3 +9,4 @@ s3_setup/artwork_s3_mapping.json
 frontend/.copilot-instructions.md
 
 backend/data_analysis/sketches/*
+backend/debug_output/*
