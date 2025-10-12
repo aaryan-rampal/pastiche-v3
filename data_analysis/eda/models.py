@@ -244,14 +244,18 @@ class ContourFAISSIndex:
               'contour_metadata' and 'hu_features'
         """
         faiss.write_index(self.index, f"{filepath}.faiss")
+
+        # Save normalization parameters if weighted distance is used
+        metadata = {
+            "contour_metadata": self.contour_metadata,
+            "hu_features": self.hu_features,
+        }
+        if self.use_weighted_distance:
+            metadata["feature_mean"] = self.feature_mean
+            metadata["feature_std"] = self.feature_std
+
         with open(f"{filepath}_metadata.pkl", "wb") as f:
-            pickle.dump(
-                {
-                    "contour_metadata": self.contour_metadata,
-                    "hu_features": self.hu_features,
-                },
-                f,
-            )
+            pickle.dump(metadata, f)
         print(f"Saved index to {filepath}")
 
         with open(f"{filepath}_metadata_s3.pkl", "wb") as f:
@@ -270,10 +274,17 @@ class ContourFAISSIndex:
         `self.hu_features` will be populated.
         """
         self.index = faiss.read_index(f"{filepath}.faiss")
+
+        # Load normalization parameters if available
         with open(f"{filepath}_metadata.pkl", "rb") as f:
             data = pickle.load(f)
             self.contour_metadata = data["contour_metadata"]
             self.hu_features = data["hu_features"]
+            if self.use_weighted_distance:
+                self.feature_mean = data.get("feature_mean")
+                self.feature_std = data.get("feature_std")
+                if self.feature_mean is None or self.feature_std is None:
+                    print("Warning: Normalization parameters not found in metadata")
         print(f"Loaded index from {filepath}")
 
         with open(f"{filepath}_metadata_s3.pkl", "rb") as f:

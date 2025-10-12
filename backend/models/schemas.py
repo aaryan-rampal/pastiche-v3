@@ -238,20 +238,27 @@ class ContourFAISSIndex:
         if self.index is None:
             raise ValueError("Index not built yet")
 
+        # Compute Hu moments for sketch
         sketch_moments = compute_hu_moments(sketch_contour)
+        logger.debug(f"Computed Hu moments for sketch: {sketch_moments}")
+
         if np.any(np.isnan(sketch_moments)) or np.any(np.isinf(sketch_moments)):
-            print("Warning: Invalid features for sketch")
+            logger.error("Invalid features for sketch (NaN or Inf)")
             return []
 
         # Apply same normalization as training data
-        # logger.info(self.use_weighted_distance)
-        # if self.use_weighted_distance:
-        #     sketch_moments = (sketch_moments - self.feature_mean) / self.feature_std
+        if self.use_weighted_distance:
+            logger.debug(f"Applying normalization with mean={self.feature_mean}, std={self.feature_std}")
+            sketch_moments_normalized = (sketch_moments - self.feature_mean) / self.feature_std
+            logger.debug(f"Normalized Hu moments: {sketch_moments_normalized}")
+            sketch_moments = sketch_moments_normalized
 
         # Search FAISS index
+        logger.debug(f"Searching FAISS index with k={k}")
         distances, indices = self.index.search(
             sketch_moments.reshape(1, -1), k
         )  # Return metadata for found contours
+        logger.debug(f"FAISS raw results: distances={distances[0][:5]}, indices={indices[0][:5]}")
         results = []
         for i, idx in enumerate(indices[0]):
             if idx < len(self.contour_metadata_s3):
@@ -269,14 +276,18 @@ class ContourFAISSIndex:
               'contour_metadata' and 'hu_features'
         """
         faiss.write_index(self.index, f"{filepath}.faiss")
+
+        # Save normalization parameters if weighted distance is used
+        metadata = {
+            "contour_metadata": self.contour_metadata,
+            "hu_features": self.hu_features,
+        }
+        if self.use_weighted_distance:
+            metadata["feature_mean"] = self.feature_mean
+            metadata["feature_std"] = self.feature_std
+
         with open(f"{filepath}_metadata.pkl", "wb") as f:
-            pickle.dump(
-                {
-                    "contour_metadata": self.contour_metadata,
-                    "hu_features": self.hu_features,
-                },
-                f,
-            )
+            pickle.dump(metadata, f)
         print(f"Saved index to {filepath}")
 
         with open(f"{filepath}_metadata_s3.pkl", "wb") as f:
@@ -295,6 +306,16 @@ class ContourFAISSIndex:
         `self.hu_features` will be populated.
         """
         self.index = faiss.read_index(f"{filepath}.faiss")
+
+        # Load normalization parameters if available
+        with open(f"{filepath}_metadata.pkl", "rb") as f:
+            data = pickle.load(f)
+            self.hu_features = data.get("hu_features")
+            if self.use_weighted_distance:
+                self.feature_mean = data.get("feature_mean")
+                self.feature_std = data.get("feature_std")
+                if self.feature_mean is None or self.feature_std is None:
+                    print("Warning: Normalization parameters not found in metadata")
 
         with open(f"{filepath}_metadata_s3.pkl", "rb") as f:
             data = pickle.load(f)

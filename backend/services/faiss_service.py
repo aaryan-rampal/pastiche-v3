@@ -55,10 +55,14 @@ class FAISSService:
             List of (distance, image_path, contour_idx) tuples
         """
         if self._index is None:
-            logger.info("FAISS index not loaded, loading now...")
+            logger.error("FAISS index not loaded!")
             raise RuntimeError("FAISS index not loaded")
 
-        return self._index.search_similar_contours(sketch_contour, k)
+        logger.debug(f"Searching FAISS index for top {k} matches...")
+        results = self._index.search_similar_contours(sketch_contour, k)
+        logger.debug(f"FAISS search returned {len(results)} results")
+
+        return results
 
     def get_metadata(self) -> List[Tuple[str, int]]:
         """Get contour metadata (image_path, contour_idx) for all indexed contours."""

@@ -7,3 +7,6 @@ __pycache__/*
 **.env**
 s3_setup/artwork_s3_mapping.json
 frontend/.copilot-instructions.md
+
+backend/data_analysis/sketches/*
+backend/backend/debug_output/*
