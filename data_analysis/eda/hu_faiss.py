@@ -15,6 +15,7 @@ DATA_DIR: str = "/Volumes/Extreme SSD/wikiart/"
 lo: int = 150
 hi: int = 200
 TRUNCATE: int = -1  # Set to positive integer to limit number of images processed
+LOAD_EXISTING_INDEX: bool = True  # Set to True to load existing FAISS index
 
 # %%
 df = pd.read_csv("../../data/classes_truncated.csv")
@@ -200,13 +201,16 @@ for row in tqdm(df.itertuples(), total=len(df)):
 print(f"Processed {len(image_ids)} images")
 
 # %%
-# Build FAISS index
-print("Building FAISS index...")
-faiss_index = ContourFAISSIndex()
-faiss_index.build_index(image_ids)
-
-# Optionally save the index
-faiss_index.save_index("contour_hu_index")
+if LOAD_EXISTING_INDEX:
+    print("Loading FAISS index...")
+    faiss_index = ContourFAISSIndex()
+    faiss_index.load_index("contour_hu_index")
+else:
+    # Build FAISS index
+    print("Building FAISS index...")
+    faiss_index = ContourFAISSIndex()
+    faiss_index.build_index(image_ids)
+    faiss_index.save_index("contour_hu_index")
 
 # %%
 # Load sketch and extract contours
