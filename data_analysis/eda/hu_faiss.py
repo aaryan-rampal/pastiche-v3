@@ -179,8 +179,6 @@ def compute_procrustes_parallel(sketch_contour, faiss_results, n_workers=None):
 
 
 # %%
-
-# %%
 # Load and process images
 print("Loading and processing images...")
 image_ids: dict[str, ImageModel] = {}
@@ -214,8 +212,7 @@ else:
 
 # %%
 # Load sketch and extract contours
-# sketch_path = "../sketches/edge.png"
-sketch_path = "../../backend/data_analysis/sketches/sketch_20251011_153435.png"
+sketch_path = "../../backend/logs/sketch_debug/sketch_20251011_175633.png"
 sketch_img = cv2.imread(sketch_path, cv2.IMREAD_GRAYSCALE)
 if sketch_img is None:
     raise ValueError("Failed to load sketch image")
